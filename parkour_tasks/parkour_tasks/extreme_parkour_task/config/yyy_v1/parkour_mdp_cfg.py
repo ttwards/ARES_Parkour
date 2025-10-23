@@ -118,32 +118,26 @@ class StudentRewardsCfg:
 @configclass
 class TeacherRewardsCfg:
     """Reward terms for the MDP.
-    ['base_link', 
-    'FL_hip', 
-    'FL_thigh', 
-    'FL_calf', 
-    'FL_foot', 
-    'FR_hip', 
-    'FR_thigh', 
-    'FR_calf', 
-    'FR_foot', 
-    'Head_upper', 
-    'Head_lower', 
-    'RL_hip', 
-    'RL_thigh', 
-    'RL_calf', 
-    'RL_foot', 
-    'RR_hip', 
-    'RR_thigh', 
-    'RR_calf',
-    'RR_foot']
+    ['base_link',
+    'LF_HipA_link',
+    'RF_HipA_link',
+    'LH_HipA_link',
+    'RH_HipA_link',
+    'LF_HipF_link',
+    'RF_HipF_link',
+    'LH_HipF_link',
+    'RH_HipF_link',
+    'LF_Knee_link',
+    'RF_Knee_link',
+    'LH_Knee_link',
+    'RH_Knee_link']
     """
 # Available Body strings: 
     reward_collision = RewTerm(
         func=rewards.reward_collision, 
-        weight=-10., 
+        weight=-4., 
         params={
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link",".*_Knee_link"]),
+            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link", ".*_Knee_link"]),
         },
     )
     reward_feet_edge = RewTerm(
@@ -165,7 +159,7 @@ class TeacherRewardsCfg:
     )
     reward_dof_error = RewTerm(
         func=rewards.reward_dof_error, 
-        weight=-0.04, 
+        weight=-0.02, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -174,7 +168,7 @@ class TeacherRewardsCfg:
         func=rewards.reward_hip_pos, 
         weight=-0.5, 
         params={
-            "asset_cfg":SceneEntityCfg("robot", joint_names=[".*_HipA_joint", ".*_HipF_joint"]),
+            "asset_cfg":SceneEntityCfg("robot", joint_names=[".*_HipA_joint"]),
         },
     )
     reward_ang_vel_xy = RewTerm(
@@ -208,7 +202,7 @@ class TeacherRewardsCfg:
     )
     reward_orientation = RewTerm(
         func=rewards.reward_orientation, 
-        weight=-1.0, 
+        weight=-0.6, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour',
