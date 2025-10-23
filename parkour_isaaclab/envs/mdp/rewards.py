@@ -24,7 +24,9 @@ class reward_feet_edge(ManagerTermBase):
         self.sensor_cfg = cfg.params["sensor_cfg"]
         self.asset_cfg = cfg.params["asset_cfg"]
         self.parkour_event: ParkourEvent =  env.parkour_manager.get_term(cfg.params["parkour_name"])
-        self.body_id = self.contact_sensor.find_bodies('base')[0]
+        # Get body_name from config, default to 'base_link' if not specified
+        body_name = cfg.params.get("body_name", "base_link")
+        self.body_id = self.contact_sensor.find_bodies(body_name)[0]
         self.horizontal_scale = env.scene.terrain.cfg.terrain_generator.horizontal_scale
         size_x, size_y = env.scene.terrain.cfg.terrain_generator.size
         self.rows_offset = (size_x * env.scene.terrain.cfg.terrain_generator.num_rows/2)
@@ -40,6 +42,7 @@ class reward_feet_edge(ManagerTermBase):
         asset_cfg: SceneEntityCfg,
         sensor_cfg: SceneEntityCfg,
         parkour_name: str,
+        body_name: str = "base_link",
         ) -> torch.Tensor:
         feet_pos_x = ((self.asset.data.body_state_w[:, self.asset_cfg.body_ids ,0] + self.rows_offset)
                       /self.horizontal_scale).round().long() 

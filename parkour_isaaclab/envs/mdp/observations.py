@@ -41,7 +41,9 @@ class ExtremeParkourObservations(ManagerTermBase):
         self.delta_next_yaw = torch.zeros(self.num_envs, device=self.device)
         self.measured_heights = torch.zeros(self.num_envs, 132, device=self.device)
         self.env = env
-        self.body_id = self.asset.find_bodies('base')[0]
+        # Get body_name from config, default to 'base' if not specified
+        body_name = cfg.params.get("body_name", "base")
+        self.body_id = self.asset.find_bodies(body_name)[0]
         
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         self._obs_history_buffer[env_ids, :, :] = 0. 
@@ -53,6 +55,7 @@ class ExtremeParkourObservations(ManagerTermBase):
         sensor_cfg: SceneEntityCfg,
         parkour_name: str,
         history_length: int,
+        body_name: str = "base",
         ) -> torch.Tensor:
         
         terrain_names = self.parkour_event.env_per_terrain_name
