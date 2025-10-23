@@ -137,7 +137,7 @@ class TeacherRewardsCfg:
         func=rewards.reward_collision, 
         weight=-4., 
         params={
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link", ".*_Knee_link"]),
+            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link", ".*_HipA_link"]),
         },
     )
     reward_feet_edge = RewTerm(
@@ -166,7 +166,7 @@ class TeacherRewardsCfg:
     )
     reward_hip_pos = RewTerm(
         func=rewards.reward_hip_pos, 
-        weight=-0.5, 
+        weight=-0.3, 
         params={
             "asset_cfg":SceneEntityCfg("robot", joint_names=[".*_HipA_joint"]),
         },
