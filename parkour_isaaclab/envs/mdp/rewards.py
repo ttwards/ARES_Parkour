@@ -216,9 +216,77 @@ class reward_delta_torques(ManagerTermBase):
         return torch.sum(torch.square((self.previous_torque[:, 1, :] - self.previous_torque[:,0,:])), dim=1)
 
 def reward_collision(
-    env: ParkourManagerBasedRLEnv, 
-    sensor_cfg: SceneEntityCfg ,
+    env: ParkourManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
-    net_contact_forces = contact_sensor.data.net_forces_w_history[:,0,sensor_cfg.body_ids]
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, 0, sensor_cfg.body_ids]
     return torch.sum(1.*(torch.norm(net_contact_forces, dim=-1) > 0.1), dim=1)
+
+
+class reward_symmetric_contact_time(ManagerTermBase):
+    """奖励左右脚对称的接地时间，鼓励协调步态
+    
+    计算指定配对脚的接地时间差异，奖励差异小的情况
+    """
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.contact_sensor: ContactSensor = env.scene.sensors[cfg.params["sensor_cfg"].name]
+        self.sensor_cfg = cfg.params["sensor_cfg"]
+        
+        # 获取脚的配对名称，并转换为索引
+        foot_pairs_names = cfg.params.get("foot_pairs", [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]])
+        
+        # 获取所有body名称列表
+        body_names = self.contact_sensor.body_names
+        body_list = [body_names[idx] for idx in self.sensor_cfg.body_ids]
+        
+        # 将名称对转换为索引对
+        self.foot_pairs = []
+        for left_name, right_name in foot_pairs_names:
+            try:
+                left_idx = body_list.index(left_name)
+                right_idx = body_list.index(right_name)
+                self.foot_pairs.append([left_idx, right_idx])
+            except ValueError:
+                raise ValueError(f"Foot name not found in sensor bodies. Available: {body_list}, Looking for: {left_name}, {right_name}")
+        
+        # 追踪每只脚的接地时间
+        num_feet = len(self.sensor_cfg.body_ids)
+        self.contact_time = torch.zeros(env.num_envs, num_feet, device=self.device)
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self.contact_time[env_ids] = 0.0
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        sensor_cfg: SceneEntityCfg,
+        foot_pairs: list = [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]],
+    ) -> torch.Tensor:
+        # 检测脚部是否在地面上
+        net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
+        in_contact = torch.norm(net_contact_forces, dim=-1) > 1.0
+
+        # 累积接地时间
+        self.contact_time[in_contact] += 1
+        self.contact_time[~in_contact] = 0
+
+        # 计算每对脚的对称性奖励
+        pair_rewards = []
+        for left_idx, right_idx in self.foot_pairs:
+            left_time = self.contact_time[:, left_idx]
+            right_time = self.contact_time[:, right_idx]
+            # 计算左右脚接地时间差异
+            diff = torch.abs(left_time - right_time)
+            # 奖励差异小的情况，使用指数衰减
+            pair_reward = torch.exp(-diff / 10.0)
+            pair_rewards.append(pair_reward)
+
+        # 总奖励是所有配对的平均
+        total_reward = torch.stack(pair_rewards).mean(dim=0)
+
+        return total_reward
+

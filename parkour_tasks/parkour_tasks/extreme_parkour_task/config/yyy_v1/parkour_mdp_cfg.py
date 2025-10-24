@@ -238,6 +238,18 @@ class TeacherRewardsCfg:
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
+    reward_symmetric_contact_time = RewTerm(
+        func=rewards.reward_symmetric_contact_time,
+        weight=0.3,
+        params={
+            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+            # foot_pairs: [[左脚名, 右脚名], ...]
+            "foot_pairs": [
+                ["LF_Knee_link", "RF_Knee_link"],  # 前腿对称
+                ["LH_Knee_link", "RH_Knee_link"],  # 后腿对称
+            ],
+        },
+    )
 
 @configclass
 class TerminationsCfg:
