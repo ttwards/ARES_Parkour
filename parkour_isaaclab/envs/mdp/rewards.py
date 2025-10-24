@@ -303,3 +303,67 @@ class reward_symmetric_contact_time(ManagerTermBase):
 
         return total_reward
 
+
+class reward_foot_no_contact_time(ManagerTermBase):
+    """惩罚某个脚长时间不落地
+    
+    跟踪每个脚的连续未接地时间，超过阈值则给予惩罚。
+    这可以防止机器人出现三足行走或某条腿长时间悬空的不自然步态。
+    """
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.contact_sensor: ContactSensor = env.scene.sensors[cfg.params["sensor_cfg"].name]
+        self.sensor_cfg = cfg.params["sensor_cfg"]
+        
+        # 接地力阈值（N），超过此值认为脚在地面上
+        self.contact_force_threshold = cfg.params.get("contact_force_threshold", 1.0)
+        
+        # 最大允许的连续未接地时间（控制步数）
+        # 默认50步，如果控制步长为0.02s，则对应1秒
+        self.max_no_contact_steps = cfg.params.get("max_no_contact_steps", 50)
+        
+        # 记录每个脚的连续未接地计数
+        num_feet = len(self.sensor_cfg.body_ids)
+        self.no_contact_count = torch.zeros(
+            env.num_envs, num_feet,
+            device=self.device, dtype=torch.float32
+        )
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self.no_contact_count[env_ids] = 0.
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        sensor_cfg: SceneEntityCfg,
+        contact_force_threshold: float = 1.0,
+        max_no_contact_steps: int = 50,
+    ) -> torch.Tensor:
+        # 检测脚部是否在地面上
+        net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
+        in_contact = torch.norm(net_contact_forces, dim=-1) > self.contact_force_threshold
+        
+        # 更新连续未接地计数
+        # 如果接地，计数归零；如果未接地，计数加1
+        self.no_contact_count = torch.where(
+            in_contact,
+            torch.zeros_like(self.no_contact_count),
+            self.no_contact_count + 1
+        )
+        
+        # 计算惩罚：当连续未接地时间超过阈值时开始惩罚
+        # 超出部分越多，惩罚越大
+        excess_time = torch.clamp(self.no_contact_count - self.max_no_contact_steps, min=0.0)
+        
+        # 对每个环境，取所有脚中最严重的惩罚（最大值）
+        # 也可以改为求和，这样会对多个脚同时悬空惩罚更重
+        penalty = torch.max(excess_time, dim=-1)[0]
+        
+        # 归一化惩罚值，避免过大
+        # 当超出50步时，惩罚值为1；超出100步时，惩罚值约为1.6
+        penalty = torch.tanh(penalty / self.max_no_contact_steps)
+        
+        return penalty
+

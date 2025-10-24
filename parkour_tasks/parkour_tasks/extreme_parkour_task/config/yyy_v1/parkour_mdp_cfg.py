@@ -240,7 +240,7 @@ class TeacherRewardsCfg:
     )
     reward_symmetric_contact_time = RewTerm(
         func=rewards.reward_symmetric_contact_time,
-        weight=0.3,
+        weight=0.15,
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
             # foot_pairs: [[左脚名, 右脚名], ...]
@@ -248,7 +248,16 @@ class TeacherRewardsCfg:
                 ["LF_Knee_link", "RF_Knee_link"],  # 前腿对称
                 ["LH_Knee_link", "RH_Knee_link"],  # 后腿对称
             ],
-            "window_size": 250,
+            "window_size": 500,
+        },
+    )
+    reward_foot_no_contact_time = RewTerm(
+        func=rewards.reward_foot_no_contact_time,
+        weight=-0.5,  # 负权重表示惩罚
+        params={
+            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+            "contact_force_threshold": 1.0,  # 接地力阈值（N）
+            "max_no_contact_steps": 150,  # 允许的最大连续未接地步数（约1秒）
         },
     )
 
