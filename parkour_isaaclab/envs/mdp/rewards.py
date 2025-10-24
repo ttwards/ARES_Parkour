@@ -367,3 +367,76 @@ class reward_foot_no_contact_time(ManagerTermBase):
         
         return penalty
 
+
+class reward_dual_contact_at_high_speed(ManagerTermBase):
+    """惩罚高速时指定配对的两只脚同时触地
+    
+    当机器人速度大于阈值时，惩罚指定配对的脚同时接地的情况。
+    这鼓励机器人在高速运动时采用更动态的步态（如跑步、小跑）而非静态步态（如慢走）。
+    """
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.contact_sensor: ContactSensor = env.scene.sensors[cfg.params["sensor_cfg"].name]
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self.sensor_cfg = cfg.params["sensor_cfg"]
+        
+        # 获取脚的配对名称，并转换为索引
+        foot_pairs_names = cfg.params.get("foot_pairs", [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]])
+        
+        # 获取所有body名称列表
+        body_names = self.contact_sensor.body_names
+        body_list = [body_names[idx] for idx in self.sensor_cfg.body_ids]
+        
+        # 将名称对转换为索引对
+        self.foot_pairs = []
+        for left_name, right_name in foot_pairs_names:
+            try:
+                left_idx = body_list.index(left_name)
+                right_idx = body_list.index(right_name)
+                self.foot_pairs.append([left_idx, right_idx])
+            except ValueError:
+                raise ValueError(f"Foot name not found in sensor bodies. Available: {body_list}, Looking for: {left_name}, {right_name}")
+        
+        # 速度阈值（m/s），超过此值时启用惩罚
+        self.speed_threshold = cfg.params.get("speed_threshold", 0.4)
+        
+        # 接地力阈值（N），超过此值认为脚在地面上
+        self.contact_force_threshold = cfg.params.get("contact_force_threshold", 1.0)
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        sensor_cfg: SceneEntityCfg,
+        asset_cfg: SceneEntityCfg,
+        foot_pairs: list = [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]],
+        speed_threshold: float = 0.4,
+        contact_force_threshold: float = 1.0,
+    ) -> torch.Tensor:
+        # 计算机器人的水平速度
+        lin_vel = self.asset.data.root_lin_vel_b[:, :2]  # 取x和y方向速度
+        speed = torch.norm(lin_vel, dim=-1)
+        
+        # 检测脚部是否在地面上
+        net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
+        in_contact = torch.norm(net_contact_forces, dim=-1) > self.contact_force_threshold
+        
+        # 只在速度大于阈值时才惩罚
+        high_speed_mask = speed > self.speed_threshold
+        
+        # 计算每对脚同时接地的惩罚
+        pair_penalties = []
+        for left_idx, right_idx in self.foot_pairs:
+            # 检查该配对的两只脚是否都在地面上
+            both_contact = in_contact[:, left_idx] & in_contact[:, right_idx]
+            pair_penalties.append(both_contact.float())
+        
+        # 计算总惩罚：任何一对脚同时接地都会产生惩罚
+        # 可以选择求和（多对同时接地惩罚更重）或最大值
+        total_penalty = torch.stack(pair_penalties).sum(dim=0)
+        
+        # 应用速度掩码：只在高速时惩罚
+        penalty = total_penalty * high_speed_mask.float()
+        
+        return penalty
+
+
