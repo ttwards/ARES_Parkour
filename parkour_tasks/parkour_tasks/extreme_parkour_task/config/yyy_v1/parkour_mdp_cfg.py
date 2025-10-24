@@ -251,30 +251,30 @@ class TeacherRewardsCfg:
     #         "window_size": 1000,
     #     },
     # )
-    # reward_foot_no_contact_time = RewTerm(
-    #     func=rewards.reward_foot_no_contact_time,
-    #     weight=-0.2,  # 负权重表示惩罚
-    #     params={
-    #         "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-    #         "contact_force_threshold": 0.5,  # 接地力阈值（N）
-    #         "max_no_contact_steps": 300,  # 允许的最大连续未接地步数（约3秒）
-    #     },
-    # )
-    reward_dual_contact_at_high_speed = RewTerm(
-        func=rewards.reward_dual_contact_at_high_speed,
-        weight=-0.3,  # 负权重表示惩罚
+    reward_foot_no_contact_time = RewTerm(
+        func=rewards.reward_foot_no_contact_time,
+        weight=-0.2,
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-            "asset_cfg":SceneEntityCfg("robot"),
-            # foot_pairs: [[脚1, 脚2], ...] 指定需要检查同时接地的脚对
-            "foot_pairs": [
-                ["LF_Knee_link", "RF_Knee_link"],  # 前腿左右配对
-                ["LH_Knee_link", "RH_Knee_link"],  # 后腿左右配对
-            ],
-            "speed_threshold": 0.4,  # 速度阈值（m/s）
-            "contact_force_threshold": 1.0,  # 接地力阈值（N）
+            "contact_force_threshold": 0.5,  # 接地力阈值（N）
+            "max_no_contact_steps": 300,  # 允许的最大连续未接地步数（约3秒）
         },
     )
+    # reward_dual_contact_at_high_speed = RewTerm(
+    #     func=rewards.reward_dual_contact_at_high_speed,
+    #     weight=-0.3,  # 负权重表示惩罚
+    #     params={
+    #         "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+    #         "asset_cfg":SceneEntityCfg("robot"),
+    #         # foot_pairs: [[脚1, 脚2], ...] 指定需要检查同时接地的脚对
+    #         "foot_pairs": [
+    #             ["LF_Knee_link", "RF_Knee_link"],  # 前腿左右配对
+    #             ["LH_Knee_link", "RH_Knee_link"],  # 后腿左右配对
+    #         ],
+    #         "speed_threshold": 0.4,  # 速度阈值（m/s）
+    #         "contact_force_threshold": 1.0,  # 接地力阈值（N）
+    #     },
+    # )
 
 @configclass
 class TerminationsCfg:
