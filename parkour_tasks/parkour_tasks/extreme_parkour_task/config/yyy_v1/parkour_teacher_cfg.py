@@ -4,7 +4,10 @@ from isaaclab.utils import configclass
 ##
 # Pre-defined configs
 ##
-from parkour_isaaclab.terrains.extreme_parkour.config.parkour import EXTREME_PARKOUR_TERRAINS_CFG  # isort: skip
+from parkour_isaaclab.terrains.extreme_parkour.config.parkour import (
+    EXTREME_PARKOUR_TERRAINS_CFG,
+    EXTREME_PARKOUR_TERRAINS_PLAY_CFG
+)  # isort: skip
 from parkour_isaaclab.envs import ParkourManagerBasedRLEnvCfg
 from .parkour_mdp_cfg import * 
 from parkour_tasks.yyy_v1_cfg import ParkourDefaultSceneCfg, VIEWER
@@ -97,14 +100,10 @@ class AresYYYv1TeacherParkourEnvCfg_PLAY(AresYYYv1TeacherParkourEnvCfg_EVAL):
         self.scene.num_envs = 16
         self.parkours.base_parkour.debug_vis = True
         self.commands.base_velocity.debug_vis = True
+        # 使用 PLAY 专用的地形配置
+        self.scene.terrain.terrain_generator = EXTREME_PARKOUR_TERRAINS_PLAY_CFG
         if self.scene.terrain.terrain_generator is not None:
             self.scene.terrain.terrain_generator.difficulty_range = (0.7,1.0)
         self.events.push_by_setting_velocity = None
-        for key, sub_terrain in self.scene.terrain.terrain_generator.sub_terrains.items():
-            if key =='parkour_flat':
-                sub_terrain.proportion = 0.0
-            else:
-                sub_terrain.proportion = 0.2
-                sub_terrain.noise_range = (0.02, 0.02)
 
 
