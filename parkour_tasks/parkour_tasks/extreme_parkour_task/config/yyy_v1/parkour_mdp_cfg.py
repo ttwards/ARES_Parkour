@@ -152,7 +152,7 @@ class TeacherRewardsCfg:
     )
     reward_torques = RewTerm(
         func=rewards.reward_torques, 
-        weight=-0.00001, 
+        weight=-0.0005, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -238,28 +238,28 @@ class TeacherRewardsCfg:
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
-    reward_symmetric_contact_time = RewTerm(
-        func=rewards.reward_symmetric_contact_time,
-        weight=0.05,
-        params={
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-            # foot_pairs: [[左脚名, 右脚名], ...]
-            "foot_pairs": [
-                ["LF_Knee_link", "RF_Knee_link"],  # 前腿对称
-                ["LH_Knee_link", "RH_Knee_link"],  # 后腿对称
-            ],
-            "window_size": 1000,
-        },
-    )
-    reward_foot_no_contact_time = RewTerm(
-        func=rewards.reward_foot_no_contact_time,
-        weight=-0.2,  # 负权重表示惩罚
-        params={
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-            "contact_force_threshold": 0.5,  # 接地力阈值（N）
-            "max_no_contact_steps": 300,  # 允许的最大连续未接地步数（约3秒）
-        },
-    )
+    # reward_symmetric_contact_time = RewTerm(
+    #     func=rewards.reward_symmetric_contact_time,
+    #     weight=0.05,
+    #     params={
+    #         "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+    #         # foot_pairs: [[左脚名, 右脚名], ...]
+    #         "foot_pairs": [
+    #             ["LF_Knee_link", "RF_Knee_link"],  # 前腿对称
+    #             ["LH_Knee_link", "RH_Knee_link"],  # 后腿对称
+    #         ],
+    #         "window_size": 1000,
+    #     },
+    # )
+    # reward_foot_no_contact_time = RewTerm(
+    #     func=rewards.reward_foot_no_contact_time,
+    #     weight=-0.2,  # 负权重表示惩罚
+    #     params={
+    #         "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+    #         "contact_force_threshold": 0.5,  # 接地力阈值（N）
+    #         "max_no_contact_steps": 300,  # 允许的最大连续未接地步数（约3秒）
+    #     },
+    # )
     reward_dual_contact_at_high_speed = RewTerm(
         func=rewards.reward_dual_contact_at_high_speed,
         weight=-0.3,  # 负权重表示惩罚
