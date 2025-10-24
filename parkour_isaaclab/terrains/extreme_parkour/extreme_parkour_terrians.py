@@ -388,3 +388,96 @@ def parkour_demo_terrain(
     return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale
 
 
+@parkour_field_to_mesh
+def parkour_wall_terrain(
+    difficulty: float, 
+    cfg: extreme_parkour_terrains_cfg.ExtremeParkourWallTerrainCfg,
+    num_goals: int, 
+    )->tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    创建墙跳地形 - 机器人需要跳过垂直的墙
+    Wall jumping terrain - robot needs to jump over vertical walls
+    """
+    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+    height_field_raw = np.zeros((width_pixels, length_pixels))
+    mid_y = length_pixels // 2
+    
+    # 解析配置参数
+    wall_thickness = eval(cfg.wall_thickness, {"difficulty": difficulty})
+    wall_thickness = round(wall_thickness / cfg.horizontal_scale)
+    
+    wall_height_range = eval(cfg.wall_height_range, {"difficulty": difficulty})
+    wall_height_min = round(wall_height_range[0] / cfg.vertical_scale)
+    wall_height_max = round(wall_height_range[1] / cfg.vertical_scale)
+    
+    dis_x_min = round(cfg.x_range[0] / cfg.horizontal_scale)
+    dis_x_max = round(cfg.x_range[1] / cfg.horizontal_scale)
+    dis_y_min = round(cfg.y_range[0] / cfg.horizontal_scale)
+    dis_y_max = round(cfg.y_range[1] / cfg.horizontal_scale)
+    
+    half_valid_width = round(np.random.uniform(cfg.half_valid_width[0], cfg.half_valid_width[1]) / cfg.horizontal_scale)
+    
+    # 初始平台
+    platform_len = round(cfg.platform_len / cfg.horizontal_scale)
+    platform_height = round(cfg.platform_height / cfg.vertical_scale)
+    height_field_raw[0:platform_len, :] = platform_height
+    
+    dis_x = platform_len
+    goals = np.zeros((num_goals, 2))
+    goal_heights = np.ones((num_goals)) * platform_height
+    goals[0] = [platform_len - 1, mid_y]
+    
+    # 生成多个墙
+    for i in range(num_goals - 2):
+        rand_x = np.random.randint(dis_x_min, dis_x_max)
+        rand_y = np.random.randint(dis_y_min, dis_y_max)
+        
+        # 墙前的平台
+        height_field_raw[dis_x:dis_x+rand_x-wall_thickness, :] = platform_height
+        
+        # 创建墙
+        wall_height = np.random.randint(wall_height_min, wall_height_max)
+        wall_start = dis_x + rand_x - wall_thickness
+        wall_end = dis_x + rand_x
+        
+        # 整个墙的高度（先设置为墙高）
+        height_field_raw[wall_start:wall_end, :] = wall_height + platform_height
+        
+        if cfg.allow_bypass:
+            # 允许绕过：在墙上留出可通过的区域（中间有通道）
+            height_field_raw[wall_start:wall_end, :mid_y+rand_y-half_valid_width] = platform_height
+            height_field_raw[wall_start:wall_end, mid_y+rand_y+half_valid_width:] = platform_height
+        else:
+            # 不允许绕过：墙占据整个宽度
+            if cfg.add_side_pits:
+                # 在墙两侧添加深坑，防止机器人从边缘绕过
+                pit_depth_value = -round(np.random.uniform(cfg.pit_depth[0], cfg.pit_depth[1]) / cfg.vertical_scale)
+                # 墙前的两侧区域变成深坑
+                height_field_raw[dis_x:wall_start, :mid_y+rand_y-half_valid_width] = pit_depth_value
+                height_field_raw[dis_x:wall_start, mid_y+rand_y+half_valid_width:] = pit_depth_value
+                # 墙后的两侧区域也是深坑
+                height_field_raw[wall_end:dis_x+rand_x+round(0.5/cfg.horizontal_scale), :mid_y+rand_y-half_valid_width] = pit_depth_value
+                height_field_raw[wall_end:dis_x+rand_x+round(0.5/cfg.horizontal_scale), mid_y+rand_y+half_valid_width:] = pit_depth_value
+            # 否则墙就是全宽的，机器人必须跳过
+        
+        dis_x += rand_x
+        # 目标点设置在墙后面
+        goals[i+1] = [dis_x + wall_thickness//2, mid_y + rand_y]
+    
+    # 最后的平台
+    final_dis_x = dis_x + np.random.randint(dis_x_min, dis_x_max)
+    if final_dis_x > width_pixels:
+        final_dis_x = width_pixels - round(0.5 / cfg.horizontal_scale)
+    
+    height_field_raw[dis_x:, :] = platform_height
+    goals[-1] = [final_dis_x, mid_y]
+    
+    # 添加边界和粗糙度
+    height_field_raw = padding_height_field_raw(height_field_raw, cfg)
+    if cfg.apply_roughness:
+        height_field_raw = random_uniform_terrain(difficulty, cfg, height_field_raw)
+    
+    return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale
+
+

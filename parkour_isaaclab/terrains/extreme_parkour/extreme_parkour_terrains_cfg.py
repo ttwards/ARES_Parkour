@@ -47,3 +47,14 @@ class ExtremeParkourTerrainCfg(ExtremeParkourRoughTerrainCfg):
 @configclass
 class ExtremeParkourDemoTerrainCfg(ExtremeParkourRoughTerrainCfg):
     function = extreme_parkour_terrians.parkour_demo_terrain
+
+@configclass
+class ExtremeParkourWallTerrainCfg(ExtremeParkourRoughTerrainCfg):
+    """Configuration for wall jumping terrain - robot needs to jump over a wall."""
+    function = extreme_parkour_terrians.parkour_wall_terrain
+    wall_thickness: str = '0.05 + 0.05 * difficulty'  # 墙的厚度 (米)
+    wall_height_range: str = '0.2 + 0.1 * difficulty, 0.3 + 0.2 * difficulty'  # 墙的高度范围
+    x_range: tuple[float, float] = (1.5, 3.0)  # 墙之间的距离
+    allow_bypass: bool = False  # 是否允许绕过墙（True=可以绕过, False=不可绕过）
+    add_side_pits: bool = False  # 墙两侧是否添加深坑（防止绕行）
+    pit_depth: tuple[float, float] = (0.3, 0.5)  # 深坑深度范围 (米)

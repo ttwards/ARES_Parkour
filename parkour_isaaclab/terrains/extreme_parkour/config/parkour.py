@@ -18,14 +18,14 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
                         apply_roughness=True,
                         x_range = (0.8, 1.5),
                         half_valid_width = (0.6, 1.2),
-                        gap_size = '0.1 + 0.7*difficulty'
+                        gap_size = '0.1 + 0.4*difficulty'
                         ),
         "parkour_hurdle": ExtremeParkourHurdleTerrainCfg(
-                        proportion=0.2,
+                        proportion=0.0,
                         apply_roughness=True,
-                        x_range = (1.2, 2.2),
+                        x_range = (0.6, 1.2),
                         half_valid_width = (0.4,0.8),
-                        hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.25*difficulty'
+                        hurdle_height_range= '0.1+0.3*difficulty, 0.25+0.35*difficulty'
                         ),
         "parkour_flat": ExtremeParkourHurdleTerrainCfg(
                         proportion=0.2,
@@ -40,7 +40,7 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
                         apply_roughness=True,
                         x_range = (0.3,1.5),
                         half_valid_width = (0.5, 1),
-                        step_height = '0.1 + 0.35*difficulty'
+                        step_height = '0.1 + 0.25*difficulty'
                         ),
         "parkour": ExtremeParkourTerrainCfg(
                         proportion=0.2,
@@ -55,6 +55,13 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
                         proportion=0.0,
                         apply_roughness=True,
                         ),
-
+        "parkour_wall": ExtremeParkourWallTerrainCfg(
+                        proportion=0.2,  # 设为 0.2 来启用这个地形
+                        apply_roughness=False,
+                        x_range = (1.5, 2.0),
+                        half_valid_width = (0.4, 0.8),
+                        wall_thickness = '0.05 + 0.1*difficulty',
+                        wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
+                        ),
     },
 )

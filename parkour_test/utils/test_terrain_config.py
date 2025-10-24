@@ -1,69 +1,136 @@
 from parkour_isaaclab.terrains.extreme_parkour.extreme_parkour_terrains_cfg import *  
 from parkour_isaaclab.terrains.parkour_terrain_generator_cfg import ParkourTerrainGeneratorCfg
+# from parkour_isaaclab.terrains.extreme_parkour.config.parkour import EXTREME_PARKOUR_TERRAINS_CFG  # isort: skip
+
+# PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
+#     size=(22.0, 12.0),
+#     border_width=5.0,
+#     num_rows=2,
+#     num_cols=2,
+#     # horizontal_scale=0.05,
+#     horizontal_scale=0.1,
+#     vertical_scale=0.005,
+#     slope_threshold=1.5,
+#     difficulty_range=(0.0, 1.0),
+#     use_cache=False,
+#     num_goals = 8,
+#     curriculum= True,
+#     sub_terrains={
+
+#         "parkour_gap": ExtremeParkourGapTerrainCfg(
+#                         proportion=0.2,
+#                         apply_roughness=True,
+#                         x_range = (0.8, 1.5),
+#                         y_range = (-0.1, 0.1),
+#                         half_valid_width = (0.6, 1.2),
+#                         )
+#         # "parkour_hurdle": ExtremeParkourHurdleTerrainCfg(
+#         #                 proportion=0.2,
+#         #                 apply_roughness=True,
+#         #                 x_range = (1.2, 2.2),
+#         #                 y_range = (-0.1, 0.1),
+#         #                 half_valid_width = (0.4,0.8),
+#         #                 hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.25*difficulty'
+#         #                 ),
+
+#         # "parkour_flat": ExtremeParkourHurdleTerrainCfg(
+#         #                 proportion=0.2,
+#         #                 apply_roughness=True,
+#         #                 apply_flat=True,
+#         #                 x_range = (1.2, 2.2),
+#         #                 y_range = (-0.1, 0.1),
+#         #                 half_valid_width = (0.4,0.8),
+#         #                 hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
+#         #                 ),
+
+#         # "parkour_step": ExtremeParkourStepTerrainCfg(
+#         #                 proportion=0.2,
+#         #                 apply_roughness=True,
+#         #                 x_range = (0.3,1.5),
+#         #                 y_range = (-0.1, 0.1),
+#         #                 half_valid_width = (0.5, 1)
+#         #                 ),
+
+#         # "parkour": ExtremeParkourTerrainCfg(
+#         #                 proportion=0.2,
+#         #                 apply_roughness=True,
+#         #                 y_range = (-0.1, 0.1),
+
+
+#         #                 ),
+#         # "parkour_demo": ExtremeParkourDemoTerrainCfg(
+#         #         y_range = (-0.1, 0.1),
+#         #         proportion=0.0,
+#         #         apply_roughness=True,
+#         #         ),
+
+
+
+#     },
+# )
+
 
 PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
-    size=(22.0, 12.0),
-    border_width=5.0,
-    num_rows=2,
-    num_cols=2,
-    # horizontal_scale=0.05,
-    horizontal_scale=0.1,
+    size=(16.0, 4.0),
+    border_width=20.0,
+    num_rows=4,
+    num_cols=8,
+    horizontal_scale=0.08, ## original scale is 0.05, But Computing issue in IsaacLab see this issue in https://github.com/isaac-sim/IsaacLab/issues/2187
     vertical_scale=0.005,
     slope_threshold=1.5,
     difficulty_range=(0.0, 1.0),
     use_cache=False,
-    num_goals = 8,
     curriculum= True,
     sub_terrains={
-
-        "parkour_gap": ExtremeParkourGapTerrainCfg(
-                        proportion=0.2,
-                        apply_roughness=True,
-                        x_range = (0.8, 1.5),
-                        y_range = (-0.1, 0.1),
-                        half_valid_width = (0.6, 1.2),
-                        )
-        # "parkour_hurdle": ExtremeParkourHurdleTerrainCfg(
+        # "parkour_gap": ExtremeParkourGapTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
-        #                 x_range = (1.2, 2.2),
-        #                 y_range = (-0.1, 0.1),
-        #                 half_valid_width = (0.4,0.8),
-        #                 hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.25*difficulty'
+        #                 x_range = (0.8, 1.5),
+        #                 half_valid_width = (0.6, 1.2),
+        #                 gap_size = '0.1 + 0.4*difficulty'
         #                 ),
-
+        # "parkour_hurdle": ExtremeParkourHurdleTerrainCfg(
+        #                 proportion=0.0,
+        #                 apply_roughness=True,
+        #                 x_range = (0.6, 1.2),
+        #                 half_valid_width = (0.4,0.8),
+        #                 hurdle_height_range= '0.1+0.3*difficulty, 0.25+0.35*difficulty'
+        #                 ),
         # "parkour_flat": ExtremeParkourHurdleTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
         #                 apply_flat=True,
         #                 x_range = (1.2, 2.2),
-        #                 y_range = (-0.1, 0.1),
         #                 half_valid_width = (0.4,0.8),
         #                 hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
         #                 ),
-
         # "parkour_step": ExtremeParkourStepTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
         #                 x_range = (0.3,1.5),
-        #                 y_range = (-0.1, 0.1),
-        #                 half_valid_width = (0.5, 1)
+        #                 half_valid_width = (0.5, 1),
+        #                 step_height = '0.1 + 0.25*difficulty'
         #                 ),
-
         # "parkour": ExtremeParkourTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
-        #                 y_range = (-0.1, 0.1),
-
-
+        #                 x_range  = '-0.1, 0.1+0.3*difficulty',
+        #                 y_range  = '0.2, 0.3+0.1*difficulty',
+        #                 stone_len  = '0.9 - 0.3*difficulty, 1 - 0.2*difficulty',
+        #                 incline_height = '0.25*difficulty',
+        #                 last_incline_height = 'incline_height + 0.1 - 0.1*difficulty'
         #                 ),
         # "parkour_demo": ExtremeParkourDemoTerrainCfg(
-        #         y_range = (-0.1, 0.1),
-        #         proportion=0.0,
-        #         apply_roughness=True,
-        #         ),
-
-
-
+        #                 proportion=0.0,
+        #                 apply_roughness=True,
+        #                 ),
+        "parkour_wall": ExtremeParkourWallTerrainCfg(
+                        proportion=1.0,  # 设为 0.2 来启用这个地形
+                        apply_roughness=False,
+                        x_range = (1.5, 2.0),
+                        half_valid_width = (0.4, 0.8),
+                        wall_thickness = '0.02 + 0.1*difficulty',
+                        wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
+                        ),
     },
 )
