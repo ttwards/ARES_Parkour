@@ -248,6 +248,7 @@ class TeacherRewardsCfg:
                 ["LF_Knee_link", "RF_Knee_link"],  # 前腿对称
                 ["LH_Knee_link", "RH_Knee_link"],  # 后腿对称
             ],
+            "window_size": 250,
         },
     )
 

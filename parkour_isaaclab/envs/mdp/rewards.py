@@ -227,7 +227,7 @@ def reward_collision(
 class reward_symmetric_contact_time(ManagerTermBase):
     """奖励左右脚对称的接地时间，鼓励协调步态
     
-    计算指定配对脚的接地时间差异，奖励差异小的情况
+    在固定时间窗口内统计左右脚的总接地时间，奖励差异小的情况
     """
     def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
@@ -251,38 +251,51 @@ class reward_symmetric_contact_time(ManagerTermBase):
             except ValueError:
                 raise ValueError(f"Foot name not found in sensor bodies. Available: {body_list}, Looking for: {left_name}, {right_name}")
         
-        # 追踪每只脚的接地时间
+        # 时间窗口大小（控制步数）
+        # 默认250步，如果控制步长为0.02s，则对应5秒
+        self.window_size = cfg.params.get("window_size", 250)
+        
+        # 使用循环缓冲区记录历史接地状态
         num_feet = len(self.sensor_cfg.body_ids)
-        self.contact_time = torch.zeros(env.num_envs, num_feet, device=self.device)
+        self.contact_history = torch.zeros(
+            env.num_envs, num_feet, self.window_size, 
+            device=self.device, dtype=torch.bool
+        )
+        self.current_idx = 0
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         if env_ids is None:
             env_ids = slice(None)
-        self.contact_time[env_ids] = 0.0
+        self.contact_history[env_ids] = False
 
     def __call__(
         self,
         env: ParkourManagerBasedRLEnv,
         sensor_cfg: SceneEntityCfg,
         foot_pairs: list = [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]],
+        window_size: int = 250,
     ) -> torch.Tensor:
         # 检测脚部是否在地面上
         net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
         in_contact = torch.norm(net_contact_forces, dim=-1) > 1.0
 
-        # 累积接地时间
-        self.contact_time[in_contact] += 1
-        self.contact_time[~in_contact] = 0
+        # 更新循环缓冲区
+        self.contact_history[:, :, self.current_idx] = in_contact
+        self.current_idx = (self.current_idx + 1) % self.window_size
+
+        # 统计时间窗口内的总接地时间
+        contact_time = self.contact_history.sum(dim=2).float()  # [num_envs, num_feet]
 
         # 计算每对脚的对称性奖励
         pair_rewards = []
         for left_idx, right_idx in self.foot_pairs:
-            left_time = self.contact_time[:, left_idx]
-            right_time = self.contact_time[:, right_idx]
-            # 计算左右脚接地时间差异
-            diff = torch.abs(left_time - right_time)
+            left_time = contact_time[:, left_idx]
+            right_time = contact_time[:, right_idx]
+            # 计算左右脚接地时间差异（占总窗口的比例）
+            diff = torch.abs(left_time - right_time) / self.window_size
             # 奖励差异小的情况，使用指数衰减
-            pair_reward = torch.exp(-diff / 10.0)
+            # diff在[0,1]范围，当差异为10%时奖励约为0.9，差异为20%时奖励约为0.82
+            pair_reward = torch.exp(-diff * 5.0)
             pair_rewards.append(pair_reward)
 
         # 总奖励是所有配对的平均
