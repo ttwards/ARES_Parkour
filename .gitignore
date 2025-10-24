@@ -1,3 +1,5 @@
 
 logs
-output
+outputs
+__cache__
+__pycache__
