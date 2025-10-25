@@ -152,7 +152,7 @@ class TeacherRewardsCfg:
     )
     reward_torques = RewTerm(
         func=rewards.reward_torques, 
-        weight=-0.0005, 
+        weight=-0.00001, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -257,7 +257,7 @@ class TeacherRewardsCfg:
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
             "contact_force_threshold": 0.5,  # 接地力阈值（N）
-            "max_no_contact_steps": 300,  # 允许的最大连续未接地步数（约3秒）
+            "max_no_contact_steps": 150,  # 允许的最大连续未接地步数（约3秒）
         },
     )
     # reward_dual_contact_at_high_speed = RewTerm(
@@ -275,6 +275,34 @@ class TeacherRewardsCfg:
     #         "contact_force_threshold": 1.0,  # 接地力阈值（N）
     #     },
     # )
+    joint_mirror = RewTerm(
+        func=rewards.joint_mirror,
+        weight=-0.05,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "mirror_joints": [
+                ["LF_HipA_joint", "RF_HipA_joint"],
+                ["LH_HipA_joint", "RH_HipA_joint"],
+            ],
+        },
+    )
+    gait_reward = RewTerm(
+        func=rewards.GaitReward,
+        weight=0.2,
+        params={
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+            "asset_cfg": SceneEntityCfg("robot"),
+            "std": 0.3,
+            "command_name": "base_velocity",
+            "max_err": 0.5,
+            "velocity_threshold": 0.3,
+            "command_threshold": 0.2,
+            "synced_feet_pair_names": [
+                ["LF_Knee_link", "RH_Knee_link"],  # 对角线配对（trot步态）
+                ["RF_Knee_link", "LH_Knee_link"],  # 对角线配对（trot步态）
+            ],
+        },
+    )
 
 @configclass
 class TerminationsCfg:
