@@ -259,8 +259,8 @@ class TeacherRewardsCfg:
             "parkour_name":'base_parkour'
         },
     )
-    reward_target_height = RewTerm(
-        func=rewards.reward_target_height,
+    reward_body_height = RewTerm(
+        func=rewards.reward_body_height,
         weight=0.7,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
