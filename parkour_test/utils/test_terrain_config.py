@@ -96,14 +96,14 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
         #                 half_valid_width = (0.4,0.8),
         #                 hurdle_height_range= '0.1+0.3*difficulty, 0.25+0.35*difficulty'
         #                 ),
-        # "parkour_flat": ExtremeParkourHurdleTerrainCfg(
-        #                 proportion=0.2,
-        #                 apply_roughness=True,
-        #                 apply_flat=True,
-        #                 x_range = (1.2, 2.2),
-        #                 half_valid_width = (0.4,0.8),
-        #                 hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
-        #                 ),
+        "parkour_flat": ExtremeParkourHurdleTerrainCfg(
+                        proportion=1.0,
+                        apply_roughness=True,
+                        apply_flat=True,
+                        x_range = (1.2, 2.2),
+                        half_valid_width = (0.4,0.8),
+                        hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
+                        ),
         # "parkour_step": ExtremeParkourStepTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
@@ -122,15 +122,15 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
         #                 ),
         # "parkour_demo": ExtremeParkourDemoTerrainCfg(
         #                 proportion=0.0,
-        #                 apply_roughness=True,
+                        # apply_roughness=True,
         #                 ),
-        "parkour_wall": ExtremeParkourWallTerrainCfg(
-                        proportion=1.0,  # 设为 0.2 来启用这个地形
-                        apply_roughness=False,
-                        x_range = (1.5, 2.0),
-                        half_valid_width = (0.4, 0.8),
-                        wall_thickness = '0.02 + 0.1*difficulty',
-                        wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
-                        ),
+        # "parkour_wall": ExtremeParkourWallTerrainCfg(
+        #                 proportion=1.0,  # 设为 0.2 来启用这个地形
+        #                 apply_roughness=False,
+        #                 x_range = (1.5, 2.0),
+        #                 half_valid_width = (0.4, 0.8),
+        #                 wall_thickness = '0.02 + 0.1*difficulty',
+        #                 wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
+        #                 ),
     },
 )
