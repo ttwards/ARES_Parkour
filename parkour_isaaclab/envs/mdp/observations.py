@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from isaaclab.managers import ObservationTermCfg
 
 
+
 class ExtremeParkourObservations(ManagerTermBase):
 
     def __init__(self, cfg: ObservationTermCfg, env: ParkourManagerBasedRLEnv):
@@ -225,8 +226,50 @@ class obervation_delta_yaw_ok(ManagerTermBase):
         asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     ):
         if env.common_step_counter % 5 == 0:
-            parkour_event: ParkourEvent =  env.parkour_manager.get_term(parkour_name)
+            parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
             asset: Articulation = env.scene[asset_cfg.name]
             _, _, yaw = euler_xyz_from_quat(asset.data.root_quat_w)
             self.delta_yaw = parkour_event.target_yaw - wrap_to_pi(yaw)
         return self.delta_yaw < threshold
+
+
+class observation_target_height(ManagerTermBase):
+    """观测目标高度和下一个目标高度相对于机器人当前位置的差异"""
+
+    def __init__(self, cfg: ObservationTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.target_height_rel = torch.zeros(self.num_envs, device=self.device)
+        self.next_target_height_rel = torch.zeros(self.num_envs, device=self.device)
+        
+        # 如果需要特定body的高度，可以获取body_id
+        body_name = cfg.params.get("body_name", None)
+        if body_name:
+            asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+            self.body_id = asset.find_bodies(body_name)[0][0]
+        else:
+            self.body_id = None
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        parkour_name: str,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        body_name: str = None,  # 可选参数，指定特定的body
+    ):
+        if env.common_step_counter % 5 == 0:
+            parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
+            asset: Articulation = env.scene[asset_cfg.name]
+
+            # 根据是否指定body_id选择高度来源
+            if self.body_id is not None:
+                current_robot_height = asset.data.body_pos_w[:, self.body_id, 2]
+            else:
+                current_robot_height = asset.data.root_pos_w[:, 2]
+
+            current_target_height = parkour_event.cur_goals[:, 2]
+            self.target_height_rel = current_target_height - current_robot_height
+
+            next_target_height = parkour_event.next_goals[:, 2]
+            self.next_target_height_rel = next_target_height - current_robot_height
+
+        return torch.stack([self.target_height_rel, self.next_target_height_rel], dim=1)

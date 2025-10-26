@@ -50,16 +50,30 @@ class TeacherObservationsCfg:
         # observation terms (order preserved)
         extreme_parkour_observations = ObsTerm(
             func=observations.ExtremeParkourObservations,
-            params={            
-            "asset_cfg":SceneEntityCfg("robot"),
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-            "parkour_name":'base_parkour',
-            "history_length": 10,
-            "body_name": "base_link"
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+                "parkour_name": 'base_parkour',
+                "history_length": 10,
+                "body_name": "base_link"
             },
-            clip= (-100,100)
+            clip=(-100, 100)
         )
+    
+    @configclass
+    class TargetHeightPolicyCfg(ObsGroup):
+        target_height = ObsTerm(
+            func=observations.observation_target_height,
+            params={
+                "parkour_name": 'base_parkour',
+                "asset_cfg": SceneEntityCfg("robot"),
+                "body_name": "base_link",
+            },
+            clip=(0.22, 0.3)
+        )
+    
     policy: PolicyCfg = PolicyCfg()
+    target_height: TargetHeightPolicyCfg = TargetHeightPolicyCfg()
 
 @configclass
 class StudentObservationsCfg:
@@ -69,13 +83,13 @@ class StudentObservationsCfg:
         """Observations for policy group."""
         extreme_parkour_observations = ObsTerm(
             func=observations.ExtremeParkourObservations,
-            params={            
-            "asset_cfg":SceneEntityCfg("robot"),
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-            "parkour_name":'base_parkour',
-            "history_length": 10,
+            params={
+                "asset_cfg":SceneEntityCfg("robot"),
+                "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+                "parkour_name":'base_parkour',
+                "history_length": 10,
             },
-            clip= (-100,100)
+            clip=(-100, 100)
         )
 
     @configclass
@@ -99,9 +113,23 @@ class StudentObservationsCfg:
             'threshold': 0.6
             },
         )
+    
+    @configclass
+    class TargetHeightPolicyCfg(ObsGroup):
+        target_height = ObsTerm(
+            func=observations.observation_target_height,
+            params={
+                "parkour_name": 'base_parkour',
+                "asset_cfg": SceneEntityCfg("robot"),
+                "body_name": "base_link",
+            },
+            clip=(0.22, 0.3)
+        )
+    
     policy: PolicyCfg = PolicyCfg()
     depth_camera: DepthCameraPolicyCfg = DepthCameraPolicyCfg()
     delta_yaw_ok: DeltaYawOkPolicyCfg = DeltaYawOkPolicyCfg()
+    target_height: TargetHeightPolicyCfg = TargetHeightPolicyCfg()
 
 
 @configclass
@@ -110,7 +138,7 @@ class StudentRewardsCfg:
         func=rewards.reward_collision, 
         weight=-0., 
         params={
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link",".*Knee_link"]),
+            "sensor_cfg": SceneEntityCfg("contact_forces", body_names=["base_link",".*Knee_link"]),
         },
     )
     
@@ -231,6 +259,14 @@ class TeacherRewardsCfg:
             "parkour_name":'base_parkour'
         },
     )
+    reward_target_height = RewTerm(
+        func=rewards.reward_target_height,
+        weight=0.3,
+        params={
+            "asset_cfg":SceneEntityCfg("robot"),
+            "parkour_name":'base_parkour'
+        },
+    )
     reward_delta_torques = RewTerm(
         func=rewards.reward_delta_torques, 
         weight=-1.0e-7, 
@@ -275,17 +311,17 @@ class TeacherRewardsCfg:
     #         "contact_force_threshold": 1.0,  # 接地力阈值（N）
     #     },
     # )
-    joint_mirror = RewTerm(
-        func=rewards.joint_mirror,
-        weight=-0.05,
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "mirror_joints": [
-                ["LF_HipA_joint", "RF_HipA_joint"],
-                ["LH_HipA_joint", "RH_HipA_joint"],
-            ],
-        },
-    )
+    # joint_mirror = RewTerm(
+    #     func=rewards.joint_mirror,
+    #     weight=-0.05,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "mirror_joints": [
+    #             ["LF_HipA_joint", "RF_HipA_joint"],
+    #             ["LH_HipA_joint", "RH_HipA_joint"],
+    #         ],
+    #     },
+    # )
     gait_reward = RewTerm(
         func=rewards.GaitReward,
         weight=0.2,

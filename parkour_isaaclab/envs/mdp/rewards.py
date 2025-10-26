@@ -95,6 +95,33 @@ def reward_ang_vel_xy(
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.sum(torch.square(asset.data.root_ang_vel_b[:,:2]), dim=1)
 
+def reward_target_height(
+    env: ParkourManagerBasedRLEnv,
+    parkour_name: str,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """奖励机器人高度接近目标高度
+    
+    鼓励机器人在垂直方向上接近目标点的高度，
+    这有助于机器人更好地跳跃到高平台或下降到低平台。
+    """
+    parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
+    asset: Articulation = env.scene[asset_cfg.name]
+    
+    # 获取当前机器人和目标的高度
+    current_robot_height = asset.data.root_pos_w[:, 2]
+    current_target_height = parkour_event.cur_goals[:, 2]
+    
+    # 计算高度差
+    height_diff = torch.abs(current_target_height - current_robot_height)
+    
+    # 使用指数函数，高度差越小奖励越大
+    # 当高度差为0时奖励为1，高度差越大奖励越小
+    reward = torch.exp(-height_diff * 2.0)
+    
+    return reward
+
+
 class reward_action_rate(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
