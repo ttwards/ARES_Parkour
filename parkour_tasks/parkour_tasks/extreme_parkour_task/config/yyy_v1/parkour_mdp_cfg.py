@@ -215,14 +215,14 @@ class TeacherRewardsCfg:
     )
     reward_dof_acc = RewTerm(
         func=rewards.reward_dof_acc, 
-        weight=-2.5e-7, 
+        weight=-1.0e-6, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
     reward_lin_vel_z = RewTerm(
         func=rewards.reward_lin_vel_z, 
-        weight=-1.0, 
+        weight=-1.5, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour',
@@ -238,7 +238,7 @@ class TeacherRewardsCfg:
     )
     reward_feet_stumble = RewTerm(
         func=rewards.reward_feet_stumble, 
-        weight=-1.0, 
+        weight=-0.12, 
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
         },
@@ -261,10 +261,11 @@ class TeacherRewardsCfg:
     )
     reward_target_height = RewTerm(
         func=rewards.reward_target_height,
-        weight=0.3,
+        weight=0.7,
         params={
-            "asset_cfg":SceneEntityCfg("robot"),
-            "parkour_name":'base_parkour'
+            "asset_cfg": SceneEntityCfg("robot"),
+            "parkour_name": 'base_parkour',
+            "body_name": 'base_link',
         },
     )
     reward_delta_torques = RewTerm(
@@ -293,7 +294,7 @@ class TeacherRewardsCfg:
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
             "contact_force_threshold": 0.5,  # 接地力阈值（N）
-            "max_no_contact_steps": 150,  # 允许的最大连续未接地步数（约3秒）
+            "max_no_contact_steps": 250,  # 允许的最大连续未接地步数（约3秒）
         },
     )
     # reward_dual_contact_at_high_speed = RewTerm(

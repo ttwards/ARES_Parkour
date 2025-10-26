@@ -95,21 +95,38 @@ def reward_ang_vel_xy(
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.sum(torch.square(asset.data.root_ang_vel_b[:,:2]), dim=1)
 
-def reward_target_height(
+
+def reward_body_height(
     env: ParkourManagerBasedRLEnv,
     parkour_name: str,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    body_name: str = "base_link",
 ) -> torch.Tensor:
     """奖励机器人高度接近目标高度
-    
-    鼓励机器人在垂直方向上接近目标点的高度，
-    这有助于机器人更好地跳跃到高平台或下降到低平台。
     """
     parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
     asset: Articulation = env.scene[asset_cfg.name]
     
+    # 缓存 body_id 到环境中，避免每次重复查找
+    cache_key = f"reward_target_height_body_id_{body_name}"
+    if not hasattr(env, cache_key):
+        body_ids = asset.find_bodies(body_name)
+        if len(body_ids) > 0 and len(body_ids[0]) > 0:
+            setattr(env, cache_key, body_ids[0][0])
+        else:
+            # 如果找不到指定的 body，回退到使用 root
+            setattr(env, cache_key, None)
+    
+    body_id = getattr(env, cache_key)
+    
     # 获取当前机器人和目标的高度
-    current_robot_height = asset.data.root_pos_w[:, 2]
+    if body_id is not None:
+        # 使用指定的 body 高度
+        current_robot_height = asset.data.body_pos_w[:, body_id, 2]
+    else:
+        # 回退到 root 高度
+        current_robot_height = asset.data.root_pos_w[:, 2]
+    
     current_target_height = parkour_event.cur_goals[:, 2]
     
     # 计算高度差
