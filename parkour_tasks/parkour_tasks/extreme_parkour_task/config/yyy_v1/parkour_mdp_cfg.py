@@ -386,8 +386,8 @@ class TeacherRewardsCfg:
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "mirror_joints": [
-                ["LF_HipA_joint", "RF_HipA_joint"],
-                ["LH_HipA_joint", "RH_HipA_joint"],
+                ["LF_HipF_joint", "RF_HipF_joint"],
+                ["LH_HipF_joint", "RH_HipF_joint"],
             ],
         },
     )
