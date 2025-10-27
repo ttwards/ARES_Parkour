@@ -250,14 +250,14 @@ class TeacherRewardsCfg:
     )
     reward_dof_error = RewTerm(
         func=rewards.reward_dof_error, 
-        weight=-0.06, 
+        weight=-0.007, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
     reward_hip_pos = RewTerm(
         func=rewards.reward_hip_pos, 
-        weight=-0.05, 
+        weight=-0.0012, 
         params={
             "asset_cfg":SceneEntityCfg("robot", joint_names=[".*_HipA_joint"]),
         },
@@ -271,7 +271,7 @@ class TeacherRewardsCfg:
     )
     reward_action_rate = RewTerm(
         func=rewards.reward_action_rate, 
-        weight=-0.1, 
+        weight=-0.4, 
         params={
           "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -293,15 +293,15 @@ class TeacherRewardsCfg:
     )
     reward_orientation = RewTerm(
         func=rewards.reward_orientation, 
-        weight=-0.9, 
+        weight=-1.9, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour',
         },
         terrain_weight_map={
             "parkour_flat": 2.0,
-            "parkour_gap": 1.3,
-            "parkour_hurdle": 1.0,
+            "parkour_gap": 0.3,
+            "parkour_hurdle": 0.5,
         }
     )
     reward_feet_stumble = RewTerm(
@@ -393,7 +393,7 @@ class TeacherRewardsCfg:
     # )
     gait_reward = RewTerm(
         func=rewards.GaitReward,
-        weight=0.2,
+        weight=0.7,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
             "asset_cfg": SceneEntityCfg("robot"),
