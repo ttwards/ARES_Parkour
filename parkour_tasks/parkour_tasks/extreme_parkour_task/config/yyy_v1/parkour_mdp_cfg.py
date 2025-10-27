@@ -1,9 +1,9 @@
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
-from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
+from parkour_isaaclab.managers import ParkourRewardTermCfg as RewTerm
 from isaaclab.utils import configclass
 from isaaclab.envs.mdp.events import ( 
 randomize_rigid_body_mass,
@@ -17,20 +17,60 @@ from parkour_isaaclab.envs.mdp import terminations, rewards, parkours, events, o
 
 @configclass
 class CommandsCfg:
-    """Command specifications for the MDP."""
+    """Command specifications for the MDP.
+    
+    支持根据sub_terrain类型设置不同的速度范围：
+    通过 terrain_ranges_map 参数可以为不同地形指定不同的速度范围。
+    
+    示例：
+        terrain_ranges_map={
+            "parkour_flat": {
+                "lin_vel_x": (0.5, 1.0),  # 平地可以跑快一点
+                "heading": (-1.6, 1.6)
+            },
+            "parkour_gap": {
+                "lin_vel_x": (0.2, 0.5),  # 间隙地形需要慢速通过
+                "heading": (-1.0, 1.0)
+            },
+            "parkour_hurdle": {
+                "lin_vel_x": (0.3, 0.6),  # 栏架地形中等速度
+                "heading": (-1.6, 1.6)
+            }
+        }
+    """
 
     base_velocity = parkour_commands.ParkourCommandCfg(
         asset_name="robot",
         resampling_time_range=(6.0,6.0 ),
         heading_control_stiffness=0.8,
         ranges=parkour_commands.ParkourCommandCfg.Ranges(
-            lin_vel_x=(0.3, 0.8), 
+            lin_vel_x=(0.3, 0.8),  # 默认速度范围
             heading=(-1.6, 1.6)
         ),
         clips= parkour_commands.ParkourCommandCfg.Clips(
             lin_vel_clip = 0.2,
             ang_vel_clip = 0.4
-        )
+        ),
+        # 可选：根据地形类型设置不同的速度范围
+        terrain_ranges_map={
+            "parkour_flat": {
+                "lin_vel_x": (0.5, 1.5),  # 平地可以跑快一点
+                "heading": (-1.6, 1.6)
+            },
+            "parkour_gap": {
+                "lin_vel_x": (0.3, 1.0),  # 间隙地形需要慢速通过
+                "heading": (-1.0, 1.0)
+            },
+            "parkour_hurdle": {
+                "lin_vel_x": (0.3, 0.7),  # 栏架地形中等速度
+                "heading": (-1.6, 1.6)
+            },
+            "parkour_step": {
+                "lin_vel_x": (0.35, 0.85),  # 台阶地形较慢速度
+                "heading": (-1.6, 1.6)
+            }
+        },
+        parkour_term_name="base_parkour",  # 指定从哪个parkour term获取地形信息
     )
 
 @configclass
@@ -147,18 +187,35 @@ class StudentRewardsCfg:
 class TeacherRewardsCfg:
     """Reward terms for the MDP.
     ['base_link',
-    'LF_HipA_link',
-    'RF_HipA_link',
-    'LH_HipA_link',
-    'RH_HipA_link',
-    'LF_HipF_link',
-    'RF_HipF_link',
-    'LH_HipF_link',
-    'RH_HipF_link',
-    'LF_Knee_link',
-    'RF_Knee_link',
-    'LH_Knee_link',
-    'RH_Knee_link']
+    'LF_HipA_link', 'RF_HipA_link', 'LH_HipA_link', 'RH_HipA_link',
+    'LF_HipF_link', 'RF_HipF_link', 'LH_HipF_link', 'RH_HipF_link',
+    'LF_Knee_link', 'RF_Knee_link', 'LH_Knee_link', 'RH_Knee_link']
+    
+    Terrain-based weight adjustment:
+    可以为任何奖励项添加 'terrain_weight_map' 来根据不同sub_terrain调整权重倍数。
+    
+    Available sub_terrain types (根据您的配置):
+    - 'parkour_flat': 平地
+    - 'parkour_gap': 间隙/裂缝
+    - 'parkour_hurdle': 栏架/障碍
+    - 'parkour_step': 台阶
+    - 'parkour': 常规跑酷地形
+    - 'parkour_demo': 演示地形
+    - 'parkour_wall': 墙壁
+    
+    使用示例:
+        reward_collision = RewTerm(
+            func=rewards.reward_collision,
+            weight=-4.0,  # 基础权重
+            params={
+                "sensor_cfg": SceneEntityCfg(...),
+            },
+            terrain_weight_map={  # 注意：terrain_weight_map 在 params 外面！
+                "parkour_flat": 0.5,    # 平地上碰撞惩罚减半
+                "parkour_gap": 2.0,     # 间隙地形碰撞惩罚翻倍
+                "parkour_hurdle": 1.5,  # 栏架地形增加50%惩罚
+            }
+        )
     """
 # Available Body strings: 
     reward_collision = RewTerm(
@@ -167,6 +224,12 @@ class TeacherRewardsCfg:
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link", ".*_HipA_link", ".*_HipF_link"]),
         },
+        # 可选: 根据地形类型调整权重（在 params 外面！）
+        # terrain_weight_map={
+        #     "parkour_flat": 0.5,    # 平地减少碰撞惩罚
+        #     "parkour_gap": 2.0,     # 间隙增加碰撞惩罚
+        #     "parkour_hurdle": 1.5,  # 栏架增加碰撞惩罚
+        # }
     )
     reward_feet_edge = RewTerm(
         func=rewards.reward_feet_edge, 
@@ -235,6 +298,11 @@ class TeacherRewardsCfg:
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour',
         },
+        terrain_weight_map={
+            "parkour_flat": 2.0,
+            "parkour_gap": 1.3,
+            "parkour_hurdle": 1.0,
+        }
     )
     reward_feet_stumble = RewTerm(
         func=rewards.reward_feet_stumble, 

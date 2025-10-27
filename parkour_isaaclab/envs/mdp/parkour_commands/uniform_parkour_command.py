@@ -26,6 +26,11 @@ class UniformParkourCommand(CommandTerm):
         self.heading_target = torch.zeros(self.num_envs, device=self.device)
         self.metrics["error_vel_xy"] = torch.zeros(self.num_envs, device=self.device)
         self.metrics["error_vel_yaw"] = torch.zeros(self.num_envs, device=self.device)
+        
+        # 如果配置了地形相关的速度范围，初始化相关变量
+        self._terrain_aware = cfg.terrain_ranges_map is not None and cfg.parkour_term_name is not None
+        if self._terrain_aware:
+            self._parkour_term_name = cfg.parkour_term_name
 
     def __str__(self) -> str:
         """Return a string representation of the command generator."""
@@ -56,10 +61,36 @@ class UniformParkourCommand(CommandTerm):
     def _resample_command(self, env_ids: Sequence[int]):
         # sample velocity commands
         r = torch.empty(len(env_ids), device=self.device)
-        # -- linear velocity - x direction
-        self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
-        # heading target
-        self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
+        
+        # 如果启用了地形感知的速度范围
+        if self._terrain_aware:
+            # 获取每个环境的地形类型
+            parkour_event = self._env.parkour_manager.get_term(self._parkour_term_name)
+            terrain_names = parkour_event.env_per_terrain_name.flatten()
+            
+            # 为每个环境单独采样，根据其地形类型
+            for env_id in env_ids:
+                terrain_name = terrain_names[env_id]
+                
+                # 获取该地形的速度范围，如果未配置则使用默认范围
+                if terrain_name in self.cfg.terrain_ranges_map:
+                    terrain_ranges = self.cfg.terrain_ranges_map[terrain_name]
+                    lin_vel_x_range = terrain_ranges.get("lin_vel_x", self.cfg.ranges.lin_vel_x)
+                    heading_range = terrain_ranges.get("heading", self.cfg.ranges.heading)
+                else:
+                    lin_vel_x_range = self.cfg.ranges.lin_vel_x
+                    heading_range = self.cfg.ranges.heading
+                
+                # 采样速度
+                self.vel_command_b[env_id, 0] = torch.empty(1, device=self.device).uniform_(*lin_vel_x_range)
+                self.heading_target[env_id] = torch.empty(1, device=self.device).uniform_(*heading_range)
+        else:
+            # 原有的统一采样方式
+            # -- linear velocity - x direction
+            self.vel_command_b[env_ids, 0] = r.uniform_(*self.cfg.ranges.lin_vel_x)
+            # heading target
+            self.heading_target[env_ids] = r.uniform_(*self.cfg.ranges.heading)
+        
         # update standing envs
         if self.cfg.small_commands_to_zero:
             self.vel_command_b[env_ids, :2] *= torch.abs(self.vel_command_b[env_ids, 0:1]) \
