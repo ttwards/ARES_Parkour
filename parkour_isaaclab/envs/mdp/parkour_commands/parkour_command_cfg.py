@@ -26,6 +26,12 @@ class ParkourCommandCfg(CommandTermCfg):
 
     ranges: Ranges = MISSING
     clips: Clips = MISSING
+    
+    # 根据地形类型调整速度范围（可选）
+    # 格式: {"terrain_name": {"lin_vel_x": (min, max), "heading": (min, max)}}
+    terrain_ranges_map: dict[str, dict] | None = None
+    # 指定parkour_manager中的哪个term提供地形信息
+    parkour_term_name: str | None = None
 
     goal_vel_visualizer_cfg: VisualizationMarkersCfg = GREEN_ARROW_X_MARKER_CFG.replace(
         prim_path="/Visuals/Command/velocity_goal"
