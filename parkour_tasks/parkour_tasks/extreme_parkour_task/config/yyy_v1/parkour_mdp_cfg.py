@@ -243,7 +243,7 @@ class TeacherRewardsCfg:
     )
     reward_torques = RewTerm(
         func=rewards.reward_torques, 
-        weight=-0.00001, 
+        weight=-0.0001, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -338,7 +338,7 @@ class TeacherRewardsCfg:
     )
     reward_delta_torques = RewTerm(
         func=rewards.reward_delta_torques, 
-        weight=-1.0e-7, 
+        weight=-1.0e-7,
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -380,17 +380,17 @@ class TeacherRewardsCfg:
     #         "contact_force_threshold": 1.0,  # 接地力阈值（N）
     #     },
     # )
-    # joint_mirror = RewTerm(
-    #     func=rewards.joint_mirror,
-    #     weight=-0.05,
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot"),
-    #         "mirror_joints": [
-    #             ["LF_HipA_joint", "RF_HipA_joint"],
-    #             ["LH_HipA_joint", "RH_HipA_joint"],
-    #         ],
-    #     },
-    # )
+    joint_mirror = RewTerm(
+        func=rewards.joint_mirror,
+        weight=0.05,
+        params={
+            "asset_cfg": SceneEntityCfg("robot"),
+            "mirror_joints": [
+                ["LF_HipA_joint", "RF_HipA_joint"],
+                ["LH_HipA_joint", "RH_HipA_joint"],
+            ],
+        },
+    )
     gait_reward = RewTerm(
         func=rewards.GaitReward,
         weight=0.7,
