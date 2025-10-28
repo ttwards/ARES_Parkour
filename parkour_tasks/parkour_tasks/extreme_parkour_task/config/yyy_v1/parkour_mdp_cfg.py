@@ -44,11 +44,11 @@ class CommandsCfg:
         resampling_time_range=(6.0,6.0 ),
         heading_control_stiffness=0.8,
         ranges=parkour_commands.ParkourCommandCfg.Ranges(
-            lin_vel_x=(0.3, 0.8),  # 默认速度范围
+            lin_vel_x=(0.3, 3.2),  # 默认速度范围
             heading=(-1.6, 1.6)
         ),
         clips= parkour_commands.ParkourCommandCfg.Clips(
-            lin_vel_clip = 0.2,
+            lin_vel_clip = 3.2,
             ang_vel_clip = 0.4
         ),
         # 可选：根据地形类型设置不同的速度范围
@@ -67,6 +67,10 @@ class CommandsCfg:
             },
             "parkour_step": {
                 "lin_vel_x": (0.35, 0.85),  # 台阶地形较慢速度
+                "heading": (-1.6, 1.6)
+            }
+            "parkour_wall": {
+                "lin_vel_x": (0.6, 1.2),  # 墙壁地形中等速度
                 "heading": (-1.6, 1.6)
             }
         },
