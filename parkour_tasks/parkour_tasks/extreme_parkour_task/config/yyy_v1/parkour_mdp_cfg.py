@@ -54,7 +54,7 @@ class CommandsCfg:
         # 可选：根据地形类型设置不同的速度范围
         terrain_ranges_map={
             "parkour_flat": {
-                "lin_vel_x": (0.8, 2.5),  # 平地可以跑快一点
+                "lin_vel_x": (0.8, 3.2),  # 平地可以跑快一点
                 "heading": (-1.6, 1.6)
             },
             "parkour_gap": {
@@ -77,14 +77,14 @@ class CommandsCfg:
     target_height = parkour_commands.TargetHeightCommandCfg(
         asset_name="robot",
         resampling_time_range=(6.0,6.0 ),
-        height_range=(0.245, 0.300),
-        terrain_height_map={
-            # 可根据地形调整高度目标范围（示例值，可按需修改）
-            "parkour_flat": (0.245, 0.285),
-            "parkour_gap": (0.255, 0.305),
-            "parkour_hurdle": (0.250, 0.295),
-            "parkour_step": (0.248, 0.290),
-        },
+        height_range=(0.26, 0.38),
+        # terrain_height_map={
+        #     # 可根据地形调整高度目标范围（示例值，可按需修改）
+        #     "parkour_flat": (0.245, 0.285),
+        #     "parkour_gap": (0.255, 0.305),
+        #     "parkour_hurdle": (0.250, 0.295),
+        #     "parkour_step": (0.248, 0.290),
+        # },
         parkour_term_name="base_parkour",
     )
 
@@ -125,7 +125,7 @@ class TeacherObservationsCfg:
                 "asset_cfg": SceneEntityCfg("robot"),
                 "body_name": "base_link",
             },
-            clip=(0.245, 0.3)
+            clip=(0.26, 0.38)
         )
     
     policy: PolicyCfg = PolicyCfg()
@@ -179,7 +179,7 @@ class StudentObservationsCfg:
                 "asset_cfg": SceneEntityCfg("robot"),
                 "body_name": "base_link",
             },
-            clip=(0.22, 0.3)
+            clip=(0.26, 0.38)
         )
     
     policy: PolicyCfg = PolicyCfg()
@@ -352,14 +352,14 @@ class TeacherRewardsCfg:
     )
     reward_body_height = RewTerm(
         func=rewards.reward_body_height,
-        weight=0.7,
+        weight=-1.8,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "parkour_name": 'base_parkour',
             "body_name": 'base_link',
         },
         terrain_weight_map={
-            "parkour_flat": 1.0,
+            "parkour_flat": 30.0,
             "parkour_gap": 0.0,
             "parkour_hurdle": 0.0,
             "parkour_step": 0.0,

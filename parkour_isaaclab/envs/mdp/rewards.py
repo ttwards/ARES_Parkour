@@ -102,8 +102,7 @@ def reward_body_height(
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
     body_name: str = "base_link",
 ) -> torch.Tensor:
-    """奖励机器人高度接近目标高度
-    """
+    """基于高度误差的 L2 惩罚（平方误差）。"""
     parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
     asset: Articulation = env.scene[asset_cfg.name]
     
@@ -128,15 +127,8 @@ def reward_body_height(
         current_robot_height = asset.data.root_pos_w[:, 2]
     
     current_target_height = parkour_event.cur_goals[:, 2]
-    
-    # 计算高度差
-    height_diff = torch.abs(current_target_height - current_robot_height)
-    
-    # 使用指数函数，高度差越小奖励越大
-    # 当高度差为0时奖励为1，高度差越大奖励越小
-    reward = torch.exp(-height_diff * 2.0)
-    
-    return reward
+    # 返回平方误差（正值），在配置中用负权重进行惩罚
+    return torch.square(current_target_height - current_robot_height)
 
 
 class reward_action_rate(ManagerTermBase):
