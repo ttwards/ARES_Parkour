@@ -74,19 +74,19 @@ class CommandsCfg:
     )
 
     # 新增：目标高度命令（1D）。注意你已添加对应的 obs，本命令用于下游 reward/控制引用
-    target_height = parkour_commands.TargetHeightCommandCfg(
-        asset_name="robot",
-        resampling_time_range=(6.0,6.0 ),
-        height_range=(0.26, 0.38),
-        # terrain_height_map={
-        #     # 可根据地形调整高度目标范围（示例值，可按需修改）
-        #     "parkour_flat": (0.245, 0.285),
-        #     "parkour_gap": (0.255, 0.305),
-        #     "parkour_hurdle": (0.250, 0.295),
-        #     "parkour_step": (0.248, 0.290),
-        # },
-        parkour_term_name="base_parkour",
-    )
+    # target_height = parkour_commands.TargetHeightCommandCfg(
+    #     asset_name="robot",
+    #     resampling_time_range=(6.0,6.0 ),
+    #     height_range=(0.26, 0.38),
+    #     # terrain_height_map={
+    #     #     # 可根据地形调整高度目标范围（示例值，可按需修改）
+    #     #     "parkour_flat": (0.245, 0.285),
+    #     #     "parkour_gap": (0.255, 0.305),
+    #     #     "parkour_hurdle": (0.250, 0.295),
+    #     #     "parkour_step": (0.248, 0.290),
+    #     # },
+    #     parkour_term_name="base_parkour",
+    # )
 
 
 @configclass
@@ -116,20 +116,20 @@ class TeacherObservationsCfg:
             clip=(-100, 100)
         )
     
-    @configclass
-    class TargetHeightPolicyCfg(ObsGroup):
-        target_height = ObsTerm(
-            func=observations.observation_target_height,
-            params={
-                "parkour_name": 'base_parkour',
-                "asset_cfg": SceneEntityCfg("robot"),
-                "body_name": "base_link",
-            },
-            clip=(0.26, 0.38)
-        )
+    # @configclass
+    # class TargetHeightPolicyCfg(ObsGroup):
+    #     target_height = ObsTerm(
+    #         func=observations.observation_target_height,
+    #         params={
+    #             "parkour_name": 'base_parkour',
+    #             "asset_cfg": SceneEntityCfg("robot"),
+    #             "body_name": "base_link",
+    #         },
+    #         clip=(0.26, 0.38)
+    #     )
     
     policy: PolicyCfg = PolicyCfg()
-    target_height: TargetHeightPolicyCfg = TargetHeightPolicyCfg()
+    # target_height: TargetHeightPolicyCfg = TargetHeightPolicyCfg()
 
 @configclass
 class StudentObservationsCfg:
@@ -170,22 +170,22 @@ class StudentObservationsCfg:
             },
         )
     
-    @configclass
-    class TargetHeightPolicyCfg(ObsGroup):
-        target_height = ObsTerm(
-            func=observations.observation_target_height,
-            params={
-                "parkour_name": 'base_parkour',
-                "asset_cfg": SceneEntityCfg("robot"),
-                "body_name": "base_link",
-            },
-            clip=(0.26, 0.38)
-        )
+    # @configclass
+    # class TargetHeightPolicyCfg(ObsGroup):
+    #     target_height = ObsTerm(
+    #         func=observations.observation_target_height,
+    #         params={
+    #             "parkour_name": 'base_parkour',
+    #             "asset_cfg": SceneEntityCfg("robot"),
+    #             "body_name": "base_link",
+    #         },
+    #         clip=(0.26, 0.38)
+    #     )
     
     policy: PolicyCfg = PolicyCfg()
-    depth_camera: DepthCameraPolicyCfg = DepthCameraPolicyCfg()
-    delta_yaw_ok: DeltaYawOkPolicyCfg = DeltaYawOkPolicyCfg()
-    target_height: TargetHeightPolicyCfg = TargetHeightPolicyCfg()
+    # depth_camera: DepthCameraPolicyCfg = DepthCameraPolicyCfg()
+    # delta_yaw_ok: DeltaYawOkPolicyCfg = DeltaYawOkPolicyCfg()
+    # target_height: TargetHeightPolicyCfg = TargetHeightPolicyCfg()
 
 
 @configclass
@@ -350,21 +350,21 @@ class TeacherRewardsCfg:
             "parkour_name":'base_parkour'
         },
     )
-    reward_body_height = RewTerm(
-        func=rewards.reward_body_height,
-        weight=-1.8,
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "parkour_name": 'base_parkour',
-            "body_name": 'base_link',
-        },
-        terrain_weight_map={
-            "parkour_flat": 30.0,
-            "parkour_gap": 0.0,
-            "parkour_hurdle": 0.0,
-            "parkour_step": 0.0,
-        }
-    )
+    # reward_body_height = RewTerm(
+    #     func=rewards.reward_body_height,
+    #     weight=-1.8,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "parkour_name": 'base_parkour',
+    #         "body_name": 'base_link',
+    #     },
+    #     terrain_weight_map={
+    #         "parkour_flat": 200.0,
+    #         "parkour_gap": 0.0,
+    #         "parkour_hurdle": 0.0,
+    #         "parkour_step": 0.0,
+    #     }
+    # )
     reward_delta_torques = RewTerm(
         func=rewards.reward_delta_torques, 
         weight=-2.0e-7,
