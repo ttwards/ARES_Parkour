@@ -68,7 +68,7 @@ class CommandsCfg:
             "parkour_step": {
                 "lin_vel_x": (0.35, 0.85),  # 台阶地形较慢速度
                 "heading": (-1.6, 1.6)
-            }
+            },
             "parkour_wall": {
                 "lin_vel_x": (0.6, 1.2),  # 墙壁地形中等速度
                 "heading": (-1.6, 1.6)
