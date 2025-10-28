@@ -67,29 +67,29 @@ class ParkourDefaultSceneCfg(InteractiveSceneCfg):
         self.robot.actuators['base_legs'] = ParkourDCMotorCfg(
             joint_names_expr=[".*_HipA_joint", ".*_HipF_joint", ".*_Knee_joint"],
             effort_limit={
-                '.*HipA_joint': 17,
-                '.*HipF_joint': 17,
-                '.*Knee_joint': 34,
+                '.*_HipA_joint': 17,
+                '.*_HipF_joint': 17,
+                '.*_Knee_joint': 34,
             },
             saturation_effort={
-                '.*HipA_joint': 17,
-                '.*HipF_joint': 17,
-                '.*Knee_joint': 34,
+                '.*_HipA_joint': 17,
+                '.*_HipF_joint': 17,
+                '.*_Knee_joint': 34,
             },
             peak_torque_speed={
-                '.*HipA_joint': 8.4,
-                '.*HipF_joint': 8.4,
-                '.*Knee_joint': 4.1,
+                '.*_HipA_joint': 8.4,
+                '.*_HipF_joint': 8.4,
+                '.*_Knee_joint': 4.1,
             },
             velocity_limit={
-                '.*HipA_joint': 22.0,
-                '.*HipF_joint': 22.0,
-                '.*Knee_joint': 11.0,
+                '.*_HipA_joint': 22.0,
+                '.*_HipF_joint': 22.0,
+                '.*_Knee_joint': 11.0,
             },
             stiffness=25.0,
             damping=0.5,
             friction=0.0,
-        ),
+        )
         # actuators={
         #     "base_legs": DCMotorCfg(
         #         joint_names_expr=[".*_HipA_joint", ".*_HipF_joint"],
