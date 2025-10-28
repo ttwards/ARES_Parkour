@@ -1,2 +1,3 @@
 from .uniform_parkour_command import UniformParkourCommand
-from .parkour_command_cfg import ParkourCommandCfg
+from .parkour_command_cfg import ParkourCommandCfg, TargetHeightCommandCfg
+from .target_height_command import UniformTargetHeightCommand

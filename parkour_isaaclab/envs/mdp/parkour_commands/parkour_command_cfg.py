@@ -6,6 +6,7 @@ from isaaclab.utils import configclass
 import math
 from dataclasses import MISSING
 from .uniform_parkour_command import UniformParkourCommand
+from .target_height_command import UniformTargetHeightCommand
 
 @configclass
 class ParkourCommandCfg(CommandTermCfg):
@@ -42,3 +43,20 @@ class ParkourCommandCfg(CommandTermCfg):
     )
     goal_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
     current_vel_visualizer_cfg.markers["arrow"].scale = (0.5, 0.5, 0.5)
+
+
+@configclass
+class TargetHeightCommandCfg(CommandTermCfg):
+    """Configuration for a 1D target height command.
+
+    height_range: (min, max) height in meters.
+    terrain_height_map: optional mapping from terrain name to (min, max).
+    parkour_term_name: name of the parkour term that exposes per-env terrain names.
+    """
+    class_type: type = UniformTargetHeightCommand
+    asset_name: str = "robot"
+    height_range: tuple[float, float] = (0.24, 0.32)
+    # 可选: 根据地形类型为不同地形设置不同的高度范围
+    terrain_height_map: dict[str, tuple[float, float]] | None = None
+    # 指定parkour_manager中的哪个term提供地形信息
+    parkour_term_name: str | None = None
