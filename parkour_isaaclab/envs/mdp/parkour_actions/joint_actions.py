@@ -45,14 +45,15 @@ class DelayedJointPositionAction(JointPositionAction):
             self._raw_actions[:] = self._action_history_buf[:, indices.long()]
         else:
             self._raw_actions[:] = actions
-        # apply the affine transformations
-
-        if self.cfg.clip is not None:
-            self._raw_actions = torch.clamp(
-                self._raw_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
-            )
+        
+        # apply the affine transformations FIRST (scale + offset)
         self._processed_actions = self._raw_actions * self._scale + self._offset
-        # clip actions
+        
+        # THEN clip the processed actions (consistent with standard JointPositionAction)
+        if self.cfg.clip is not None:
+            self._processed_actions = torch.clamp(
+                self._processed_actions, min=self._clip[:, :, 0], max=self._clip[:, :, 1]
+            )
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         self._raw_actions[env_ids] = 0.0
