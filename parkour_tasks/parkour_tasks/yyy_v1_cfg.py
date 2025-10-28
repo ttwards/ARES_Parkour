@@ -64,27 +64,54 @@ class ParkourDefaultSceneCfg(InteractiveSceneCfg):
     )
     def __post_init__(self):
         self.robot.spawn.articulation_props.enabled_self_collisions = True
-        # self.robot.actuators['base_legs'] = ParkourDCMotorCfg(
-        #     joint_names_expr=[".*_hip_joint", ".*_thigh_joint", ".*_calf_joint"],
-        #     effort_limit={
-        #                 '.*_hip_joint':35.0,
-        #                 '.*_thigh_joint':40.0,
-        #                 '.*_calf_joint':40.0,
-        #                 },
-        #     saturation_effort={
-        #                 '.*_hip_joint':35.0,
-        #                 '.*_thigh_joint':45.0,
-        #                 '.*_calf_joint':45.0,
-        #                 },
-        #     velocity_limit={
-        #                 '.*_hip_joint':52.4,
-        #                 '.*_thigh_joint':30.1,
-        #                 '.*_calf_joint':30.1,
-        #                 },
-        #     stiffness=40.0,
-        #     damping=1.0,
-        #     friction=0.0,
-        # )
+        self.robot.actuators['base_legs'] = ParkourDCMotorCfg(
+            joint_names_expr=[".*_HipA_joint", ".*_HipF_joint", ".*_Knee_joint"],
+            effort_limit={
+                '.*HipA_joint': 17,
+                '.*HipF_joint': 17,
+                '.*Knee_joint': 34,
+            },
+            saturation_effort={
+                '.*HipA_joint': 17,
+                '.*HipF_joint': 17,
+                '.*Knee_joint': 34,
+            },
+            peak_torque_speed={
+                '.*HipA_joint': 8.4,
+                '.*HipF_joint': 8.4,
+                '.*Knee_joint': 4.1,
+            },
+            velocity_limit={
+                '.*HipA_joint': 22.0,
+                '.*HipF_joint': 22.0,
+                '.*Knee_joint': 11.0,
+            },
+            stiffness=25.0,
+            damping=0.5,
+            friction=0.0,
+        ),
+        # actuators={
+        #     "base_legs": DCMotorCfg(
+        #         joint_names_expr=[".*_HipA_joint", ".*_HipF_joint"],
+        #         effort_limit=17,
+        #         saturation_effort=17,
+        #         peak_torque_speed=8.4,
+        #         velocity_limit=22.0,
+        #         stiffness=25.0,
+        #         damping=0.5,
+        #         friction=0.0,
+        #     ),
+        #     "double_legs": DCMotorCfg(
+        #         joint_names_expr=[".*_Knee_joint"],
+        #         effort_limit=34,
+        #         saturation_effort=34,
+        #         peak_torque_speed=4.1,
+        #         velocity_limit=11.0,
+        #         stiffness=25.0,
+        #         damping=0.5,
+        #         friction=0.0,
+        #     ),
+        # },
 
 
 # we are now using a raycaster based camera, not a pinhole camera. see tail issue https://github.com/isaac-sim/IsaacLab/issues/719
