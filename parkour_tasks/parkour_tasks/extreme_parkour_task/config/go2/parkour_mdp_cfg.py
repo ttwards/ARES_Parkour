@@ -152,6 +152,7 @@ class TeacherRewardsCfg:
             "asset_cfg":SceneEntityCfg(name="robot", body_names=["FL_foot","FR_foot","RL_foot","RR_foot"]),
             "sensor_cfg":SceneEntityCfg(name="contact_forces", body_names=".*_foot"),
             "parkour_name":'base_parkour',
+            "body_name": 'base',
         },
     )
     reward_torques = RewTerm(
