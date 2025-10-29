@@ -11,15 +11,6 @@ apply_external_force_torque,
 reset_joints_by_scale
 
 )
-from isaaclab.envs.mdp.rewards import (
-    undesired_contacts,
-    joint_torques_l2,
-    ang_vel_xy_l2,
-    action_rate_l2,
-    joint_acc_l2,
-    lin_vel_z_l2,
-    flat_orientation_l2
-)
 from parkour_isaaclab.envs.mdp.parkour_actions import DelayedJointPositionActionCfg 
 from parkour_isaaclab.envs.mdp import terminations, rewards, parkours, events, observations, parkour_commands
 
@@ -52,21 +43,21 @@ class CommandsCfg:
         resampling_time_range=(6.0,6.0 ),
         heading_control_stiffness=0.8,
         ranges=parkour_commands.ParkourCommandCfg.Ranges(
-            lin_vel_x=(0.3, 3.2),  # 默认速度范围
+            lin_vel_x=(0.3, 1.5),  # 默认速度范围
             heading=(-1.6, 1.6)
         ),
         clips= parkour_commands.ParkourCommandCfg.Clips(
-            lin_vel_clip = 3.2,
+            lin_vel_clip = 0.2,
             ang_vel_clip = 0.4
         ),
         # 可选：根据地形类型设置不同的速度范围
         terrain_ranges_map={
             "parkour_flat": {
-                "lin_vel_x": (0.8, 3.2),  # 平地可以跑快一点
+                "lin_vel_x": (0.8, 1.5),  # 平地可以跑快一点
                 "heading": (-1.6, 1.6)
             },
             "parkour_gap": {
-                "lin_vel_x": (0.3, 1.4),  # 间隙地形需要慢速通过
+                "lin_vel_x": (0.3, 0.9),  # 间隙地形需要慢速通过
                 "heading": (-1.0, 1.0)
             },
             "parkour_hurdle": {
@@ -78,7 +69,7 @@ class CommandsCfg:
                 "heading": (-1.6, 1.6)
             },
             "parkour_wall": {
-                "lin_vel_x": (0.6, 1.2),  # 墙壁地形中等速度
+                "lin_vel_x": (0.6, 1.0),  # 墙壁地形中等速度
                 "heading": (-1.6, 1.6)
             }
         },
@@ -247,11 +238,10 @@ class TeacherRewardsCfg:
     """
 # Available Body strings: 
     reward_collision = RewTerm(
-        func=undesired_contacts, 
-        weight=-0.15, 
+        func=rewards.reward_collision, 
+        weight=-4., 
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=["base_link", ".*_HipA_link", ".*_HipF_link"]),
-            "threshold": 0.1,
         },
         # 可选: 根据地形类型调整权重（在 params 外面！）
         # terrain_weight_map={
@@ -262,7 +252,7 @@ class TeacherRewardsCfg:
     )
     reward_feet_edge = RewTerm(
         func=rewards.reward_feet_edge, 
-        weight=-0.45, 
+        weight=-1.0, 
         params={
             "asset_cfg":SceneEntityCfg(name="robot", body_names=[".*_Knee_link"]),
             "sensor_cfg":SceneEntityCfg(name="contact_forces", body_names=".*_Knee_link"),
@@ -271,91 +261,99 @@ class TeacherRewardsCfg:
         },
     )
     reward_torques = RewTerm(
-        func=joint_torques_l2, 
-        weight=-0.00008,
+        func=rewards.reward_torques, 
+        weight=-0.00001,
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
     reward_dof_error = RewTerm(
         func=rewards.reward_dof_error, 
-        weight=-0.007, 
+        weight=-0.04, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
     reward_hip_pos = RewTerm(
         func=rewards.reward_hip_pos, 
-        weight=-0.025,
+        weight=-0.1,
         params={
             "asset_cfg":SceneEntityCfg("robot", joint_names=[".*_HipA_joint"]),
         },
     )
     reward_ang_vel_xy = RewTerm(
-        func=ang_vel_xy_l2, 
+        func=rewards.reward_ang_vel_xy, 
         weight=-0.05, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
     reward_action_rate = RewTerm(
-        func=action_rate_l2, 
-        weight=-0.06, 
-        params={},
+        func=rewards.reward_action_rate, 
+        weight=-0.1, 
+        params={
+          "asset_cfg":SceneEntityCfg("robot"),
+        },
     )
     reward_dof_acc = RewTerm(
-        func=joint_acc_l2, 
-        weight=-1.0e-8,
+        func=rewards.reward_dof_acc, 
+        weight=-2.5e-7,
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
     )
     reward_lin_vel_z = RewTerm(
-        func=lin_vel_z_l2, 
-        weight=-1.9, 
+        func=rewards.reward_lin_vel_z, 
+        weight=-1.0, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
+            "parkour_name":'base_parkour',
         },
-        terrain_weight_map={
-            "parkour_flat": 1.0,
-            "parkour_gap": 0.15,
-            "parkour_hurdle": 0.2,
-            "parkour_step": 0.05,
-            "parkour_wall": 0.1,
-        }
+        # 可选：根据地形类型调整权重
+        # terrain_weight_map={
+        #     "parkour_flat": 1.0,
+        #     "parkour_gap": 0.15,
+        #     "parkour_hurdle": 0.2,
+        #     "parkour_step": 0.05,
+        #     "parkour_wall": 0.1,
+        # }
     )
     reward_orientation = RewTerm(
-        func=flat_orientation_l2, 
-        weight=-1.9, 
+        func=rewards.reward_orientation, 
+        weight=-1.0, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
+            "parkour_name":'base_parkour',
         },
+        # 可选：根据地形类型调整权重
         terrain_weight_map={
-            "parkour_flat": 2.0,
-            "parkour_gap": 0.55,
+            "parkour_flat": 1.0,
+            "parkour_gap": 0.65,
             "parkour_hurdle": 0.1,
-            "parkour_step": 0.2,
+            "parkour_step": 0.15,
         }
     )
     reward_feet_stumble = RewTerm(
         func=rewards.reward_feet_stumble, 
-        weight=-0.08, 
+        weight=-1.0, 
         params={
             "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
         },
     )
     reward_tracking_goal_vel = RewTerm(
         func=rewards.reward_tracking_goal_vel, 
-        weight=1.9e-3, 
+        weight=1.0, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour'
         },
-
+        # 可选：根据地形类型调整权重
         terrain_weight_map={
             "parkour_flat": 1.4,
             "parkour_gap": 0.6,
-            "parkour_hurdle": 0.85,
+            "parkour_hurdle": 0.65,
+            "parkour_step": 0.5,
+            "parkour_wall": 0.3,
         }
     )
     reward_tracking_yaw = RewTerm(
@@ -383,7 +381,7 @@ class TeacherRewardsCfg:
     # )
     reward_delta_torques = RewTerm(
         func=rewards.reward_delta_torques, 
-        weight=-2.0e-7,
+        weight=-1.0e-7,
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -401,15 +399,15 @@ class TeacherRewardsCfg:
     #         "window_size": 1000,
     #     },
     # )
-    reward_foot_no_contact_time = RewTerm(
-        func=rewards.reward_foot_no_contact_time,
-        weight=-0.02,
-        params={
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
-            "contact_force_threshold": 0.5,  # 接地力阈值（N）
-            "max_no_contact_steps": 250,  # 允许的最大连续未接地步数（约3秒）
-        },
-    )
+    # reward_foot_no_contact_time = RewTerm(
+    #     func=rewards.reward_foot_no_contact_time,
+    #     weight=-0.02,
+    #     params={
+    #         "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
+    #         "contact_force_threshold": 0.5,  # 接地力阈值（N）
+    #         "max_no_contact_steps": 250,  # 允许的最大连续未接地步数（约3秒）
+    #     },
+    # )
     # reward_dual_contact_at_high_speed = RewTerm(
     #     func=rewards.reward_dual_contact_at_high_speed,
     #     weight=-0.3,  # 负权重表示惩罚
@@ -425,21 +423,21 @@ class TeacherRewardsCfg:
     #         "contact_force_threshold": 1.0,  # 接地力阈值（N）
     #     },
     # )
-    joint_mirror = RewTerm(
-        func=rewards.joint_mirror,
-        weight=0.025,
-        params={
-            "asset_cfg": SceneEntityCfg("robot"),
-            "mirror_joints": [
-                ["LF_HipA_joint", "RF_HipA_joint"],
-                ["LH_HipA_joint", "RH_HipA_joint"],
-            ],
-        },
-    )
+    # joint_mirror = RewTerm(
+    #     func=rewards.joint_mirror,
+    #     weight=0.025,
+    #     params={
+    #         "asset_cfg": SceneEntityCfg("robot"),
+    #         "mirror_joints": [
+    #             ["LF_HipA_joint", "RF_HipA_joint"],
+    #             ["LH_HipA_joint", "RH_HipA_joint"],
+    #         ],
+    #     },
+    # )
 
     gait_reward = RewTerm(
         func=rewards.GaitReward,
-        weight=0.15,
+        weight=0.25,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
             "asset_cfg": SceneEntityCfg("robot"),
