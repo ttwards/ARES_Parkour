@@ -18,7 +18,7 @@ class ParkourTeacherSceneCfg(ParkourDefaultSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot/base_link",
         offset=RayCasterCfg.OffsetCfg(pos=(0.375, 0.0, 20.0)),
         ray_alignment='yaw',
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.15, size=[1.65, 1.5]),
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.15, size=[1.65, 1.15]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
