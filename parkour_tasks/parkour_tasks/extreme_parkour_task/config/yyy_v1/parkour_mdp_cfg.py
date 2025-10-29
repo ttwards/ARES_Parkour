@@ -43,7 +43,7 @@ class CommandsCfg:
         resampling_time_range=(6.0,6.0 ),
         heading_control_stiffness=0.8,
         ranges=parkour_commands.ParkourCommandCfg.Ranges(
-            lin_vel_x=(0.3, 1.5),  # 默认速度范围
+            lin_vel_x=(0.3, 2.0),  # 默认速度范围
             heading=(-1.6, 1.6)
         ),
         clips= parkour_commands.ParkourCommandCfg.Clips(
@@ -53,7 +53,7 @@ class CommandsCfg:
         # 可选：根据地形类型设置不同的速度范围
         terrain_ranges_map={
             "parkour_flat": {
-                "lin_vel_x": (0.8, 1.5),  # 平地可以跑快一点
+                "lin_vel_x": (0.8, 2.0),  # 平地可以跑快一点
                 "heading": (-1.6, 1.6)
             },
             "parkour_gap": {
@@ -61,7 +61,7 @@ class CommandsCfg:
                 "heading": (-1.0, 1.0)
             },
             "parkour_hurdle": {
-                "lin_vel_x": (0.3, 0.9),  # 栏架地形中等速度
+                "lin_vel_x": (0.6, 1.0),  # 栏架地形中等速度
                 "heading": (-1.6, 1.6)
             },
             "parkour_step": {
@@ -266,6 +266,13 @@ class TeacherRewardsCfg:
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
+        terrain_weight_map={
+            "parkour_flat": 1.0,
+            "parkour_gap": 0.3,
+            "parkour_hurdle": 0.2,
+            "parkour_step": 0.2,
+            "parkour_wall": 0.2,
+        }
     )
     reward_dof_error = RewTerm(
         func=rewards.reward_dof_error, 
@@ -310,13 +317,13 @@ class TeacherRewardsCfg:
             "parkour_name":'base_parkour',
         },
         # 可选：根据地形类型调整权重
-        # terrain_weight_map={
-        #     "parkour_flat": 1.0,
-        #     "parkour_gap": 0.15,
-        #     "parkour_hurdle": 0.2,
-        #     "parkour_step": 0.05,
-        #     "parkour_wall": 0.1,
-        # }
+        terrain_weight_map={
+            "parkour_flat": 1.0,
+            "parkour_gap": 0.15,
+            "parkour_hurdle": 0.2,
+            "parkour_step": 0.05,
+            "parkour_wall": 0.1,
+        }
     )
     reward_orientation = RewTerm(
         func=rewards.reward_orientation, 
@@ -328,7 +335,7 @@ class TeacherRewardsCfg:
         # 可选：根据地形类型调整权重
         terrain_weight_map={
             "parkour_flat": 1.0,
-            "parkour_gap": 0.65,
+            "parkour_gap": 0.3,
             "parkour_hurdle": 0.1,
             "parkour_step": 0.15,
         }
@@ -342,18 +349,18 @@ class TeacherRewardsCfg:
     )
     reward_tracking_goal_vel = RewTerm(
         func=rewards.reward_tracking_goal_vel, 
-        weight=1.0, 
+        weight=1.9, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour'
         },
         # 可选：根据地形类型调整权重
         terrain_weight_map={
-            "parkour_flat": 1.4,
-            "parkour_gap": 0.6,
-            "parkour_hurdle": 0.65,
-            "parkour_step": 0.5,
-            "parkour_wall": 0.3,
+            "parkour_flat": 1.2,
+            "parkour_gap": 0.9,
+            "parkour_hurdle": 0.8,
+            "parkour_step": 0.9,
+            "parkour_wall": 0.8,
         }
     )
     reward_tracking_yaw = RewTerm(
@@ -385,6 +392,13 @@ class TeacherRewardsCfg:
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
+        terrain_weight_map={
+            "parkour_flat": 1.0,
+            "parkour_gap": 0.5,
+            "parkour_hurdle": 0.1,
+            "parkour_step": 0.2,
+            "parkour_wall": 0.1,
+        }
     )
     # reward_symmetric_contact_time = RewTerm(
     #     func=rewards.reward_symmetric_contact_time,
@@ -451,6 +465,13 @@ class TeacherRewardsCfg:
                 ["RF_Knee_link", "LH_Knee_link"],  # 对角线配对（trot步态）
             ],
         },
+        terrain_weight_map={
+            "parkour_flat": 1.0,
+            "parkour_gap": 0.3,
+            "parkour_hurdle": 0.2,
+            "parkour_step": 0.2,
+            "parkour_wall": 0.2,
+        }
     )
 
 @configclass
