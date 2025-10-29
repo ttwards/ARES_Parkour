@@ -16,9 +16,9 @@ from parkour_tasks.yyy_v1_cfg import ParkourDefaultSceneCfg, VIEWER
 class ParkourTeacherSceneCfg(ParkourDefaultSceneCfg):
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base_link",
-        offset=RayCasterCfg.OffsetCfg(pos=(0.375, 0.0, 20.0)),
+        offset=RayCasterCfg.OffsetCfg(pos=(0.2, 0.0, 20.0)),
         ray_alignment='yaw',
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.15, size=[1.65, 1.15]),
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.15, size=[2.0, 1.5]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )

@@ -113,7 +113,7 @@ class TeacherObservationsCfg:
                 "asset_cfg": SceneEntityCfg("robot"),
                 "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
                 "parkour_name": 'base_parkour',
-                "history_length": 10,
+                "history_length": 20,
                 "body_name": "base_link"
             },
             clip=(-100, 100)
@@ -146,7 +146,7 @@ class StudentObservationsCfg:
                 "asset_cfg":SceneEntityCfg("robot"),
                 "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
                 "parkour_name":'base_parkour',
-                "history_length": 10,
+                "history_length": 20,
             },
             clip=(-100, 100)
         )
@@ -575,7 +575,7 @@ class ActionsCfg:
         use_default_offset=True,
         action_delay_steps = [1, 1],
         delay_update_global_steps = 24 * 8000,
-        history_length = 8,
+        history_length = 16,
         use_delay = True,
         clip = {'.*': (-4.8,4.8)}
         )

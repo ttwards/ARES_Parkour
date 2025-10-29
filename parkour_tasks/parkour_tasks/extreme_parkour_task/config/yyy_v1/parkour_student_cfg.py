@@ -64,7 +64,7 @@ class AresYYYv1StudentParkourEnvCfg(ParkourManagerBasedRLEnvCfg):
         self.scene.contact_forces.update_period = self.sim.dt * self.decimation
         self.scene.terrain.terrain_generator.curriculum = True
         self.actions.joint_pos.use_delay = True
-        self.actions.joint_pos.history_length = 8
+        self.actions.joint_pos.history_length = 16
 
 
 
