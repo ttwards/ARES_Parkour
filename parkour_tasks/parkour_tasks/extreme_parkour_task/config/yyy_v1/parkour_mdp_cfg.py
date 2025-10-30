@@ -43,7 +43,7 @@ class CommandsCfg:
         resampling_time_range=(6.0,6.0 ),
         heading_control_stiffness=0.8,
         ranges=parkour_commands.ParkourCommandCfg.Ranges(
-            lin_vel_x=(0.3, 2.5),  # 默认速度范围
+            lin_vel_x=(0.3, 3.),  # 默认速度范围
             heading=(-1.6, 1.6)
         ),
         clips= parkour_commands.ParkourCommandCfg.Clips(
@@ -53,11 +53,11 @@ class CommandsCfg:
         # 可选：根据地形类型设置不同的速度范围
         terrain_ranges_map={
             "parkour_flat": {
-                "lin_vel_x": (0.8, 2.5),  # 平地可以跑快一点
+                "lin_vel_x": (0.8, 3.),  # 平地可以跑快一点
                 "heading": (-1.6, 1.6)
             },
             "parkour_gap": {
-                "lin_vel_x": (0.6, 1.4),  # 间隙地形需要慢速通过
+                "lin_vel_x": (0.6, 2.0),  # 间隙地形需要慢速通过
                 "heading": (-1.0, 1.0)
             },
             # "parkour_hurdle": {
@@ -65,11 +65,11 @@ class CommandsCfg:
             #     "heading": (-1.6, 1.6)
             # },
             "parkour_step": {
-                "lin_vel_x": (0.55, 1.4),  # 台阶地形较慢速度
+                "lin_vel_x": (0.55, 1.8),  # 台阶地形较慢速度
                 "heading": (-1.6, 1.6)
             },
             "parkour_wall": {
-                "lin_vel_x": (0.8, 1.4),  # 墙壁地形中等速度
+                "lin_vel_x": (0.8, 1.7),  # 墙壁地形中等速度
                 "heading": (-1.6, 1.6)
             }
         },
@@ -359,7 +359,7 @@ class TeacherRewardsCfg:
     )
     feet_slide = RewTerm(
         func=rewards.feet_slide,
-        weight=-0.12,
+        weight=-0.3,
         params={
             "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Knee_link"),
             "asset_cfg": SceneEntityCfg("robot", body_names=".*_Knee_link"),
@@ -367,7 +367,7 @@ class TeacherRewardsCfg:
     )
     reward_tracking_goal_vel = RewTerm(
         func=rewards.reward_tracking_goal_vel, 
-        weight=1.9, 
+        weight=2.25, 
         params={
             "asset_cfg":SceneEntityCfg("robot"),
             "parkour_name":'base_parkour'
