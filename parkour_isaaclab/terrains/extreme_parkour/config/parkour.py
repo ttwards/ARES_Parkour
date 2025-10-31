@@ -60,7 +60,7 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
                         apply_roughness=False,
                         x_range = (1.5, 2.0),
                         half_valid_width = (0.4, 0.8),
-                        wall_thickness = '0.3 - 0.1*difficulty',
+                        wall_thickness = '0.2 - 0.06*difficulty',
                         wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
                         ),
     },
@@ -126,7 +126,7 @@ EXTREME_PARKOUR_TERRAINS_PLAY_CFG = ParkourTerrainGeneratorCfg(
                         apply_roughness=False,
                         x_range = (1.5, 2.0),
                         half_valid_width = (0.4, 0.8),
-                        wall_thickness = '0.06',
+                        wall_thickness = '0.2 - 0.06*difficulty',
                         wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
                         ),
     },
