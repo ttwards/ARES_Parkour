@@ -25,23 +25,55 @@ if TYPE_CHECKING:
     from isaaclab.managers import ObservationTermCfg
 
 
-
 class ExtremeParkourObservations(ManagerTermBase):
 
     def __init__(self, cfg: ObservationTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
         self.contact_sensor: ContactSensor = env.scene.sensors['contact_forces']
         self.ray_sensor: RayCaster = env.scene.sensors['height_scanner']
-        self.parkour_event: ParkourEvent =  env.parkour_manager.get_term(cfg.params["parkour_name"])
+        self.parkour_event: ParkourEvent = env.parkour_manager.get_term(cfg.params["parkour_name"])
         self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
         self.sensor_cfg = cfg.params["sensor_cfg"]
         self.asset_cfg = cfg.params["asset_cfg"]
         self.history_length = cfg.params['history_length']
-        self._obs_history_buffer = torch.zeros(self.num_envs, self.history_length, 3 + 2 + 3 + 4 + 36 + 5, device=self.device)
+        
+        # Get joint configuration from params
+        pos_joint_patterns = cfg.params.get("pos_joints", [".*"])  # Default: all joints
+        vel_joint_patterns = cfg.params.get("vel_joints", [])  # Default: empty (same as pos)
+        
+        # Get joint indices for position observation
+        self.pos_joint_ids = []
+        for pattern in pos_joint_patterns:
+            joint_ids, _ = self.asset.find_joints(pattern)
+            self.pos_joint_ids.extend(joint_ids)
+        self.pos_joint_ids = sorted(list(set(self.pos_joint_ids)))
+        
+        # Get joint indices for velocity observation
+        if len(vel_joint_patterns) == 0:
+            # If not specified, use same joints as position
+            self.vel_joint_ids = self.pos_joint_ids
+        else:
+            self.vel_joint_ids = []
+            for pattern in vel_joint_patterns:
+                joint_ids, _ = self.asset.find_joints(pattern)
+                self.vel_joint_ids.extend(joint_ids)
+            self.vel_joint_ids = sorted(list(set(self.vel_joint_ids)))
+        
+        # Calculate observation dimensions
+        num_pos_joints = len(self.pos_joint_ids)
+        num_vel_joints = len(self.vel_joint_ids)
+        num_contacts = len(self.sensor_cfg.body_ids)
+        
+        # obs_dim = ang_vel(3) + imu(2) + delta_yaws(3) + commands(3) + env_idx(2) + 
+        #           joint_pos(num_pos_joints) + joint_vel(num_vel_joints) + actions(num_pos_joints) + contacts(num_contacts)
+        obs_dim = 3 + 2 + 3 + 3 + 2 + num_pos_joints + num_vel_joints + num_pos_joints + num_contacts
+        
+        self._obs_history_buffer = torch.zeros(self.num_envs, self.history_length, obs_dim, device=self.device)
         self.delta_yaw = torch.zeros(self.num_envs, device=self.device)
         self.delta_next_yaw = torch.zeros(self.num_envs, device=self.device)
         self.measured_heights = torch.zeros(self.num_envs, 132, device=self.device)
         self.env = env
+        
         # Get body_name from config, default to 'base' if not specified
         body_name = cfg.params.get("body_name", "base")
         self.body_id = self.asset.find_bodies(body_name)[0]
@@ -51,17 +83,19 @@ class ExtremeParkourObservations(ManagerTermBase):
 
     def __call__(
         self,
-        env: ParkourManagerBasedRLEnv,        
+        env: ParkourManagerBasedRLEnv,
         asset_cfg: SceneEntityCfg,
         sensor_cfg: SceneEntityCfg,
         parkour_name: str,
         history_length: int,
         body_name: str = "base",
-        ) -> torch.Tensor:
-        
+        pos_joints: list = None,
+        vel_joints: list = None,
+    ) -> torch.Tensor:
+
         terrain_names = self.parkour_event.env_per_terrain_name
-        env_idx_tensor = torch.tensor((terrain_names != 'parkour_flat')).to(dtype = torch.bool, device=self.device)
-        invert_env_idx_tensor = torch.tensor((terrain_names == 'parkour_flat')).to(dtype = torch.bool, device=self.device)
+        env_idx_tensor = torch.tensor((terrain_names != 'parkour_flat')).to(dtype=torch.bool, device=self.device)
+        invert_env_idx_tensor = torch.tensor((terrain_names == 'parkour_flat')).to(dtype=torch.bool, device=self.device)
         roll, pitch, yaw = euler_xyz_from_quat(self.asset.data.root_quat_w)
         imu_obs = torch.stack((wrap_to_pi(roll), wrap_to_pi(pitch)), dim=1).to(self.device)
         if env.common_step_counter % 5 == 0:
@@ -69,29 +103,42 @@ class ExtremeParkourObservations(ManagerTermBase):
             self.delta_next_yaw = self.parkour_event.next_target_yaw - wrap_to_pi(yaw)
             self.measured_heights = self._get_heights()
         commands = env.command_manager.get_command('base_velocity')
+        
+        # Get joint data using configured indices
+        joint_pos = (self.asset.data.joint_pos[:, self.pos_joint_ids] -
+                     self.asset.data.default_joint_pos[:, self.pos_joint_ids])
+        joint_vel = self.asset.data.joint_vel[:, self.vel_joint_ids] * 0.05
+        actions = env.action_manager.get_term('joint_pos').action_history_buf[:, -1]
+        
         obs_buf = torch.cat((
-                            self.asset.data.root_ang_vel_b * 0.25,   #[1,3] 0~2
-                            imu_obs,    #[1,2] 3~4
-                            0*self.delta_yaw[:, None],   #[1,1] 5
-                            self.delta_yaw[:, None], #[1,1] 6
-                            self.delta_next_yaw[:, None], #[1,1] 7 
-                            0*commands[:, 0:2], #[1,2] 8 
-                            commands[:, 0:1],  #[1,1] 9
-                            env_idx_tensor,
-                            invert_env_idx_tensor,
-                            self.asset.data.joint_pos - self.asset.data.default_joint_pos,
-                            self.asset.data.joint_vel * 0.05 ,
-                            env.action_manager.get_term('joint_pos').action_history_buf[:, -1],
-                            self._get_contact_fill(),
-                            ),dim=-1)
+            self.asset.data.root_ang_vel_b * 0.25,  # [N, 3]
+            imu_obs,  # [N, 2]
+            0 * self.delta_yaw[:, None],  # [N, 1]
+            self.delta_yaw[:, None],  # [N, 1]
+            self.delta_next_yaw[:, None],  # [N, 1]
+            0 * commands[:, 0:2],  # [N, 2]
+            commands[:, 0:1],  # [N, 1]
+            env_idx_tensor,  # [N, 1]
+            invert_env_idx_tensor,  # [N, 1]
+            joint_pos,  # [N, num_pos_joints]
+            joint_vel,  # [N, num_vel_joints]
+            actions,  # [N, num_pos_joints]
+            self._get_contact_fill(),  # [N, num_contacts]
+        ), dim=-1)
         priv_explicit = self._get_priv_explicit()
         priv_latent = self._get_priv_latent()
-        observations = torch.cat([obs_buf, #53
-                                  self.measured_heights, #132
-                                  priv_explicit, # 9
-                                  priv_latent, # 29
-                                  self._obs_history_buffer.view(self.num_envs, -1)
-                                  ],dim=-1)
+        # obs_buf: dynamic size based on joint config
+        # measured_heights: 132
+        # priv_explicit: 9
+        # priv_latent: 5 + 2 * num_pos_joints (mass(4) + friction(1) + stiffness + damping)
+        # history: obs_dim * history_length
+        observations = torch.cat([
+            obs_buf,
+            self.measured_heights,
+            priv_explicit,
+            priv_latent,
+            self._obs_history_buffer.view(self.num_envs, -1)
+        ], dim=-1)
         obs_buf[:, 6:8] = 0
         self._obs_history_buffer = torch.where(
             (env.episode_length_buf <= 1)[:, None, None], 
@@ -121,22 +168,23 @@ class ExtremeParkourObservations(ManagerTermBase):
                         0 * base_lin_vel,
                         0 * base_lin_vel), dim=-1).to(self.device)
     
-    def _get_priv_latent(
-        self,
-        ):
-        body_mass = self.asset.root_physx_view.get_masses()[:,self.body_id].to(self.device)
-        body_com = self.asset.data.com_pos_b[:,self.body_id,:].to(self.device).squeeze(1)
-        mass_params_tensor = torch.cat([body_mass, body_com],dim=-1).to(self.device)
+    def _get_priv_latent(self):
+        body_mass = self.asset.root_physx_view.get_masses()[:, self.body_id].to(self.device)
+        body_com = self.asset.data.com_pos_b[:, self.body_id, :].to(self.device).squeeze(1)
+        mass_params_tensor = torch.cat([body_mass, body_com], dim=-1).to(self.device)
         friction_coeffs_tensor = self.asset.root_physx_view.get_material_properties()[:, 0, 0]
-        joint_stiffness = self.asset.data.joint_stiffness.to(self.device)
-        default_joint_stiffness = self.asset.data.default_joint_stiffness.to(self.device)
-        joint_damping = self.asset.data.joint_damping.to(self.device)
-        default_joint_damping = self.asset.data.default_joint_damping.to(self.device)
+        
+        # Use only position joints for stiffness and damping
+        joint_stiffness = self.asset.data.joint_stiffness[:, self.pos_joint_ids].to(self.device)
+        default_joint_stiffness = self.asset.data.default_joint_stiffness[:, self.pos_joint_ids].to(self.device)
+        joint_damping = self.asset.data.joint_damping[:, self.pos_joint_ids].to(self.device)
+        default_joint_damping = self.asset.data.default_joint_damping[:, self.pos_joint_ids].to(self.device)
+        
         return torch.cat((
             mass_params_tensor,
             friction_coeffs_tensor.unsqueeze(1).to(self.device),
-            (joint_stiffness/ default_joint_stiffness) - 1, 
-            (joint_damping/ default_joint_damping) - 1
+            (joint_stiffness / default_joint_stiffness) - 1,
+            (joint_damping / default_joint_damping) - 1
         ), dim=-1).to(self.device)
     
     def _get_heights(self):
@@ -233,43 +281,43 @@ class obervation_delta_yaw_ok(ManagerTermBase):
         return self.delta_yaw < threshold
 
 
-class observation_target_height(ManagerTermBase):
-    """观测目标高度和下一个目标高度相对于机器人当前位置的差异"""
+# class observation_target_height(ManagerTermBase):
+#     """观测目标高度和下一个目标高度相对于机器人当前位置的差异"""
 
-    def __init__(self, cfg: ObservationTermCfg, env: ParkourManagerBasedRLEnv):
-        super().__init__(cfg, env)
-        self.target_height_rel = torch.zeros(self.num_envs, device=self.device)
-        self.next_target_height_rel = torch.zeros(self.num_envs, device=self.device)
+#     def __init__(self, cfg: ObservationTermCfg, env: ParkourManagerBasedRLEnv):
+#         super().__init__(cfg, env)
+#         self.target_height_rel = torch.zeros(self.num_envs, device=self.device)
+#         self.next_target_height_rel = torch.zeros(self.num_envs, device=self.device)
         
-        # 如果需要特定body的高度，可以获取body_id
-        body_name = cfg.params.get("body_name", None)
-        if body_name:
-            asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
-            self.body_id = asset.find_bodies(body_name)[0][0]
-        else:
-            self.body_id = None
+#         # 如果需要特定body的高度，可以获取body_id
+#         body_name = cfg.params.get("body_name", None)
+#         if body_name:
+#             asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+#             self.body_id = asset.find_bodies(body_name)[0][0]
+#         else:
+#             self.body_id = None
 
-    def __call__(
-        self,
-        env: ParkourManagerBasedRLEnv,
-        parkour_name: str,
-        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-        body_name: str = None,  # 可选参数，指定特定的body
-    ):
-        if env.common_step_counter % 5 == 0:
-            parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
-            asset: Articulation = env.scene[asset_cfg.name]
+#     def __call__(
+#         self,
+#         env: ParkourManagerBasedRLEnv,
+#         parkour_name: str,
+#         asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+#         body_name: str = None,  # 可选参数，指定特定的body
+#     ):
+#         if env.common_step_counter % 5 == 0:
+#             parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
+#             asset: Articulation = env.scene[asset_cfg.name]
 
-            # 根据是否指定body_id选择高度来源
-            if self.body_id is not None:
-                current_robot_height = asset.data.body_pos_w[:, self.body_id, 2]
-            else:
-                current_robot_height = asset.data.root_pos_w[:, 2]
+#             # 根据是否指定body_id选择高度来源
+#             if self.body_id is not None:
+#                 current_robot_height = asset.data.body_pos_w[:, self.body_id, 2]
+#             else:
+#                 current_robot_height = asset.data.root_pos_w[:, 2]
 
-            current_target_height = parkour_event.cur_goals[:, 2]
-            self.target_height_rel = current_target_height - current_robot_height
+#             current_target_height = parkour_event.cur_goals[:, 2]
+#             self.target_height_rel = current_target_height - current_robot_height
 
-            next_target_height = parkour_event.next_goals[:, 2]
-            self.next_target_height_rel = next_target_height - current_robot_height
+#             next_target_height = parkour_event.next_goals[:, 2]
+#             self.next_target_height_rel = next_target_height - current_robot_height
 
-        return torch.stack([self.target_height_rel, self.next_target_height_rel], dim=1)
+#         return torch.stack([self.target_height_rel, self.next_target_height_rel], dim=1)

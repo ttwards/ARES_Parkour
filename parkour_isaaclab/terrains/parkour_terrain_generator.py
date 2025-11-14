@@ -16,7 +16,7 @@ class ParkourTerrainGenerator(TerrainGenerator):
         length_pixels = int(cfg.size[1] / cfg.horizontal_scale) + 1
         self.total_width_pixels = width_pixels * cfg.num_rows
         self.total_length_pixels = length_pixels * cfg.num_cols
-        self.goal_heights = np.zeros((cfg.num_rows, cfg.num_cols, self.num_goals), dtype=np.int16)
+        self.goal_heights = np.zeros((cfg.num_rows, cfg.num_cols, self.num_goals), dtype=np.float32)
         self.x_edge_maskes = np.zeros((cfg.num_rows, cfg.num_cols, width_pixels, length_pixels), dtype=np.int16)
 
         super().__init__(cfg=cfg, device=device)
@@ -45,9 +45,9 @@ class ParkourTerrainGenerator(TerrainGenerator):
             mesh, origin, sub_terrain_goal, goal_heights, x_edge_mask = self._get_terrain_mesh(difficulty, sub_terrains_cfg)
             # add to sub-terrains
             self.terrain_names[sub_row, sub_col] = sub_terrains_name
-            self._add_sub_terrain(mesh, origin, sub_row, sub_col, sub_terrain_goal)
+            self._add_sub_terrain(mesh, origin, sub_row, sub_col, sub_terrain_goal, goal_heights)
             self.goal_heights[sub_row, sub_col, :] = goal_heights
-            self.x_edge_maskes[sub_row, sub_col,: ,:] = x_edge_mask 
+            self.x_edge_maskes[sub_row, sub_col, : , :] = x_edge_mask 
 
     def _generate_curriculum_terrains(self):
         """Add terrains based on the difficulty parameter."""
@@ -80,7 +80,7 @@ class ParkourTerrainGenerator(TerrainGenerator):
                 # add to sub-terrains
                 self.terrain_type[sub_row, sub_col] = sub_indices[sub_col]
                 self.terrain_names[sub_row, sub_col] = sub_terrains_name
-                self._add_sub_terrain(mesh, origin, sub_row, sub_col, sub_terrain_goal)
+                self._add_sub_terrain(mesh, origin, sub_row, sub_col, sub_terrain_goal, goal_heights)
                 self.goal_heights[sub_row, sub_col, :] = goal_heights
                 self.x_edge_maskes[sub_row, sub_col,: ,:] = x_edge_mask
 
@@ -138,6 +138,7 @@ class ParkourTerrainGenerator(TerrainGenerator):
         row: int, 
         col: int, 
         sub_terrain_goal: np.ndarray, 
+        goal_heights: np.ndarray,
     ):
         # transform the mesh to the correct position
         transform = np.eye(4)
@@ -148,3 +149,4 @@ class ParkourTerrainGenerator(TerrainGenerator):
         # add origin to the list
         self.terrain_origins[row, col] = origin + transform[:3, -1]
         self.goals[row, col, :, :2] = sub_terrain_goal 
+        self.goals[row, col, :, 2] = goal_heights

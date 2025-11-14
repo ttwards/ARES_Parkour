@@ -83,34 +83,37 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
     curriculum= True,
     sub_terrains={
         # "parkour_gap": ExtremeParkourGapTerrainCfg(
-        #                 proportion=0.2,
+        #                 proportion=0.25,
         #                 apply_roughness=True,
         #                 x_range = (0.8, 1.5),
         #                 half_valid_width = (0.6, 1.2),
         #                 gap_size = '0.1 + 0.4*difficulty'
         #                 ),
-        # "parkour_hurdle": ExtremeParkourHurdleTerrainCfg(
-        #                 proportion=0.0,
-        #                 apply_roughness=True,
-        #                 x_range = (0.6, 1.2),
-        #                 half_valid_width = (0.4,0.8),
-        #                 hurdle_height_range= '0.1+0.3*difficulty, 0.25+0.35*difficulty'
-        #                 ),
+        "parkour_hurdle": ExtremeParkourHurdleTriMeshTerrainCfg(
+            proportion=0.25,
+            apply_roughness=False,
+            pole_size='0.10 - 0.05 * difficulty',
+            bar_size='0.10 - 0.05 * difficulty',
+            hurdle_height_range='0.6 - 0.4 * difficulty, 0.65 - 0.4 * difficulty',
+            x_range=(1.5, 2.5),
+            y_range=(-0.3, 0.3),
+            half_valid_width=(0.85, 1.15),
+        ),
         "parkour_flat": ExtremeParkourHurdleTerrainCfg(
-                        proportion=1.0,
-                        apply_roughness=True,
-                        apply_flat=True,
-                        x_range = (1.2, 2.2),
-                        half_valid_width = (0.4,0.8),
-                        hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
+                            proportion=0.25,
+                            apply_roughness=True,
+                            apply_flat=True,
+                            x_range = (1.2, 2.2),
+                            half_valid_width = (0.4,0.8),
+                            hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
                         ),
-        # "parkour_step": ExtremeParkourStepTerrainCfg(
-        #                 proportion=0.2,
-        #                 apply_roughness=True,
-        #                 x_range = (0.3,1.5),
-        #                 half_valid_width = (0.5, 1),
-        #                 step_height = '0.1 + 0.25*difficulty'
-        #                 ),
+        "parkour_step": ExtremeParkourStepTerrainCfg(
+                        proportion=0.25,
+                        apply_roughness=True,
+                        x_range = (0.3,1.5),
+                        half_valid_width = (0.5, 1),
+                        step_height = '0.1 + 0.25*difficulty'
+                        ),
         # "parkour": ExtremeParkourTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
@@ -122,15 +125,15 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
         #                 ),
         # "parkour_demo": ExtremeParkourDemoTerrainCfg(
         #                 proportion=0.0,
-                        # apply_roughness=True,
+        #                 apply_roughness=True,
         #                 ),
-        # "parkour_wall": ExtremeParkourWallTerrainCfg(
-        #                 proportion=1.0,  # 设为 0.2 来启用这个地形
-        #                 apply_roughness=False,
-        #                 x_range = (1.5, 2.0),
-        #                 half_valid_width = (0.4, 0.8),
-        #                 wall_thickness = '0.02 + 0.1*difficulty',
-        #                 wall_height_range = '0.2 + 0.1*difficulty, 0.3 + 0.2*difficulty'
-        #                 ),
+        "parkour_wall": ExtremeParkourWallTerrainCfg(
+                        proportion=0.25,  # 设为 0.2 来启用这个地形
+                        apply_roughness=False,
+                        x_range = (1.5, 2.0),
+                        half_valid_width = (0.4, 0.8),
+                        wall_thickness = '0.14 - 0.1*difficulty',
+                        wall_height_range = '0.16 + 0.1*difficulty, 0.2 + 0.1*difficulty'
+                        ),
     },
 )

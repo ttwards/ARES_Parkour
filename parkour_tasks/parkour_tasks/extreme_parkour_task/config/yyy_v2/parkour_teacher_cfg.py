@@ -10,7 +10,7 @@ from parkour_isaaclab.terrains.extreme_parkour.config.parkour import (
 )  # isort: skip
 from parkour_isaaclab.envs import ParkourManagerBasedRLEnvCfg
 from .parkour_mdp_cfg import * 
-from parkour_tasks.yyy_v1_cfg import ParkourDefaultSceneCfg, VIEWER
+from parkour_tasks.yyy_v2_cfg import ParkourDefaultSceneCfg, VIEWER
 import torch
 import math
 
@@ -66,7 +66,7 @@ class ParkourTeacherSceneCfg(ParkourDefaultSceneCfg):
         self.terrain.terrain_generator = EXTREME_PARKOUR_TERRAINS_CFG
         
 @configclass
-class AresYYYv1TeacherParkourEnvCfg(ParkourManagerBasedRLEnvCfg):
+class AresYYYv2TeacherParkourEnvCfg(ParkourManagerBasedRLEnvCfg):
     scene: ParkourTeacherSceneCfg = ParkourTeacherSceneCfg(num_envs=6144, env_spacing=1.)
     # Basic settings
     observations: TeacherObservationsCfg = TeacherObservationsCfg()
@@ -97,7 +97,7 @@ class AresYYYv1TeacherParkourEnvCfg(ParkourManagerBasedRLEnvCfg):
         self.events.random_camera_position = None
 
 @configclass
-class AresYYYv1TeacherParkourEnvCfg_EVAL(AresYYYv1TeacherParkourEnvCfg):
+class AresYYYv2TeacherParkourEnvCfg_EVAL(AresYYYv2TeacherParkourEnvCfg):
     viewer = VIEWER 
 
     def __post_init__(self):
@@ -123,7 +123,7 @@ class AresYYYv1TeacherParkourEnvCfg_EVAL(AresYYYv1TeacherParkourEnvCfg):
                 sub_terrain.proportion = 0.25
                 
 @configclass
-class AresYYYv1TeacherParkourEnvCfg_PLAY(AresYYYv1TeacherParkourEnvCfg_EVAL):
+class AresYYYv2TeacherParkourEnvCfg_PLAY(AresYYYv2TeacherParkourEnvCfg_EVAL):
     viewer = VIEWER 
 
     def __post_init__(self):

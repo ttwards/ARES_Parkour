@@ -17,6 +17,90 @@ if TYPE_CHECKING:
 import cv2
 import numpy as np 
 
+# 在你的 rewards.py 或相应的reward manager文件中
+
+import torch
+from isaaclab.managers import SceneEntityCfg
+
+
+def hurdle_collision_penalty(
+    env: ParkourManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    collision_threshold: float = 0.4,  # 距离目标0.4m内检测碰撞
+    hurdle_height_margin: float = 0.05,  # 横杆底部5cm的安全裕度
+    penalty_scale: float = -5.0,
+    parkour_name: str = "base_parkour",
+) -> torch.Tensor:
+    """
+    惩罚机器狗在接近跨栏目标时从上方通过（碰撞横杆）
+    
+    Args:
+        env: 环境实例
+        asset_cfg: 机器人资产配置
+        collision_threshold: 触发检测的距离阈值（米）
+        hurdle_height_margin: 横杆下方的安全裕度（米）
+        penalty_scale: 惩罚系数（负数）
+        
+    Returns:
+        惩罚值张量 shape: (num_envs,)
+    """
+    # 获取机器人
+    robot: Articulation = env.scene[asset_cfg.name]
+    parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
+    
+    # 获取机器人base_link的世界坐标高度
+    base_height_w = robot.data.root_pos_w[:, 2]
+    
+    # 获取机器人在地形局部坐标系中的位置
+    robot_pos_local = robot.data.root_pos_w[:, :2] - parkour_event.env_origins[:, :2]
+    
+    # 计算到当前目标的距离
+    dist_to_goal = torch.norm(robot_pos_local - parkour_event.cur_goals[:, :2], dim=1)
+    
+    # 只在接近目标时检测（距离 < collision_threshold）
+    near_goal = dist_to_goal < collision_threshold
+    
+    # 获取当前目标的高度（横杆底部高度）
+    # 注意：这里假设 cur_goals[:, 2] 存储的是目标高度
+    goal_height = parkour_event.cur_goals[:, 2]
+    
+    # 检测是否发生碰撞：base_link高度超过横杆底部（考虑安全裕度）
+    collision_detected = base_height_w > (goal_height + hurdle_height_margin)
+    
+    # 组合条件：接近目标 且 发生碰撞
+    penalty_mask = near_goal & collision_detected
+    
+    # 返回惩罚（只有满足条件的环境才有惩罚）
+    penalty = torch.where(penalty_mask, penalty_scale, 0.0)
+    
+    return penalty
+
+def wall_clear_reward(
+    env: ParkourManagerBasedRLEnv,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    parkour_name: str = "base_parkour",
+    clearance_threshold: float = 0.45,
+    height_margin: float = 0.0,
+    saturation_margin: float = 0.2,
+    reward_scale: float = 1.0,
+) -> torch.Tensor:
+    """根据跨越墙体的高度余量给奖励，超出可配置的裕度后奖励不再增加。"""
+    robot: Articulation = env.scene[asset_cfg.name]
+    parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
+
+    base_height_w = robot.data.root_pos_w[:, 2]
+    robot_pos_local = robot.data.root_pos_w[:, :2] - parkour_event.env_origins[:, :2]
+    dist_to_goal = torch.norm(robot_pos_local - parkour_event.cur_goals[:, :2], dim=1)
+    near_goal = dist_to_goal < clearance_threshold
+
+    goal_height = parkour_event.cur_goals[:, 2]
+    height_diff = base_height_w - goal_height
+    clearance = torch.clamp(height_diff - height_margin, min=0.0)
+    denom = saturation_margin if saturation_margin > 1e-6 else 1e-6
+    normalized_reward = torch.clamp(clearance / denom, max=1.0) * reward_scale
+
+    return torch.where(near_goal, normalized_reward, torch.zeros_like(normalized_reward))
+
 class reward_feet_edge(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
@@ -135,42 +219,44 @@ def reward_body_height(
 class reward_action_rate(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
-        asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
-        self.previous_actions = torch.zeros(env.num_envs, 2,  asset.num_joints, dtype= torch.float ,device=self.device)
+        # Use the actual action dimension instead of total joint count
+        action_dim = env.action_manager.get_term('joint_pos')._num_joints
+        self.previous_actions = torch.zeros(env.num_envs, 2, action_dim, dtype=torch.float, device=self.device)
         
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
-        self.previous_actions[env_ids, 0,:] = 0.
-        self.previous_actions[env_ids, 1,:] = 0.
+        self.previous_actions[env_ids, 0, :] = 0.
+        self.previous_actions[env_ids, 1, :] = 0.
 
     def __call__(
         self,
-        env: ParkourManagerBasedRLEnv,        
+        env: ParkourManagerBasedRLEnv,
         asset_cfg: SceneEntityCfg,
-        ) -> torch.Tensor:
+    ) -> torch.Tensor:
         self.previous_actions[:, 0, :] = self.previous_actions[:, 1, :]
         self.previous_actions[:, 1, :] = env.action_manager.get_term('joint_pos').raw_actions
-        return torch.norm(self.previous_actions[:, 1, :] - self.previous_actions[:,0,:], dim=1)
+        return torch.norm(self.previous_actions[:, 1, :] - self.previous_actions[:, 0, :], dim=1)
     
 class reward_dof_acc(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
         asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
-        self.previous_joint_vel = torch.zeros(env.num_envs, 2,  asset.num_joints, dtype= torch.float ,device=self.device)
+        # Use all joints for velocity tracking (including wheels)
+        self.previous_joint_vel = torch.zeros(env.num_envs, 2, asset.num_joints, dtype=torch.float, device=self.device)
         self.dt = env.cfg.decimation * env.cfg.sim.dt
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
-        self.previous_joint_vel[env_ids, 0,:] = 0.
-        self.previous_joint_vel[env_ids, 1,:] = 0.
+        self.previous_joint_vel[env_ids, 0, :] = 0.
+        self.previous_joint_vel[env_ids, 1, :] = 0.
 
     def __call__(
         self,
-        env: ParkourManagerBasedRLEnv,        
+        env: ParkourManagerBasedRLEnv,
         asset_cfg: SceneEntityCfg,
-        ) -> torch.Tensor:
+    ) -> torch.Tensor:
         asset: Articulation = env.scene[asset_cfg.name]
         self.previous_joint_vel[:, 0, :] = self.previous_joint_vel[:, 1, :]
         self.previous_joint_vel[:, 1, :] = asset.data.joint_vel
-        return torch.sum(torch.square((self.previous_joint_vel[:, 1, :] - self.previous_joint_vel[:,0,:]) / self.dt), dim=1)
+        return torch.sum(torch.square((self.previous_joint_vel[:, 1, :] - self.previous_joint_vel[:, 0, :]) / self.dt), dim=1)
 
 
 class GaitReward(ManagerTermBase):
@@ -403,6 +489,122 @@ def reward_tracking_goal_vel(
     rew_move = torch.minimum(proj_vel, command_vel) / (command_vel + 1e-5)
     return rew_move
 
+class reward_cumulative_speed_error(ManagerTermBase):
+    """
+    只有当速度误差连续超过阈值持续一段时间后才累加；低于阈值后快速归零。
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.accumulated_error = torch.zeros(self.num_envs, device=self.device)
+        # 连续超阈计数（按步）
+        self._over_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+
+        # 如果你更喜欢用“秒”做时间阈值，会尝试从环境里自动拿 dt
+        self._env_dt = None
+        for attr in ("dt", "step_dt", "sim_dt"):
+            if hasattr(env, attr):
+                val = getattr(env, attr)
+                # 兼容张量/标量
+                try:
+                    self._env_dt = float(val)
+                except Exception:
+                    pass
+                break
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self.accumulated_error[env_ids] = 0.0
+        self._over_steps[env_ids] = 0
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg,
+        command_name: str = "base_velocity",
+        # ------- 新增/调整参数 -------
+        speed_threshold: float = 0.2,     # 速度误差阈值（m/s）
+        time_threshold_s: float | None = 0.25,   # 连续超阈需维持的时间（秒）；若为 None 则使用 steps_threshold
+        steps_threshold: int | None = None,      # 连续超阈需维持的“步数”；若 time_threshold_s 与 dt 可用则忽略
+        fast_clear_decay: float = 0.0,    # 低于阈值时的快速归零衰减系数：0=瞬时清零，0.1=每步保留10%
+        normal_decay: float = 1.0,        # 正常累加时的衰减（<=1）；用于“缓慢遗忘”的效果
+        accumulation_scale: float = 1.0,
+        max_penalty: float = 5.0,
+    ) -> torch.Tensor:
+        """
+        fast_clear_decay ∈ [0,1]，建议 0~0.2；normal_decay ∈ [0,1]。
+        """
+        asset: Articulation = env.scene[asset_cfg.name]
+        desired_vel = env.command_manager.get_command(command_name)[:, :2]
+        current_vel = asset.data.root_lin_vel_b[:, :2]
+
+        # 标量误差（m/s）
+        error = torch.norm(desired_vel - current_vel, dim=-1)
+
+        # 判定用阈值掩码
+        over_mask = error > speed_threshold
+
+        # 连续超阈计数（按步）
+        self._over_steps = torch.where(
+            over_mask,
+            self._over_steps + 1,
+            torch.zeros_like(self._over_steps)
+        )
+
+        # 计算需要的连续步数阈值
+        if steps_threshold is not None:
+            need_steps = max(int(steps_threshold), 1)
+        else:
+            # 用秒 -> 步（需要环境 dt）
+            if time_threshold_s is None:
+                # 兜底：如果没给任何时间阈值，就当作1步
+                need_steps = 1
+            else:
+                if self._env_dt is None or self._env_dt <= 0:
+                    # 没法从环境拿到 dt，就退化为1步
+                    need_steps = 1
+                else:
+                    need_steps = max(int(round(time_threshold_s / self._env_dt)), 1)
+
+        # 是否“已超过阈值并持续到达阈时”
+        active_mask = self._over_steps >= need_steps
+
+        # 计算本步要累加的量（仅在 active 状态）
+        inc = (error * accumulation_scale)
+
+        # 正常阶段使用 normal_decay 进行“缓慢遗忘 + 累加”
+        normal_decay = float(min(max(normal_decay, 0.0), 1.0))
+        new_accum = self.accumulated_error * normal_decay + inc
+
+        # 低于阈值时快速归零：acc *= fast_clear_decay
+        fast_clear_decay = float(min(max(fast_clear_decay, 0.0), 1.0))
+        cleared = self.accumulated_error * fast_clear_decay
+
+        # 组合更新：active 用 new_accum；否则用 cleared
+        self.accumulated_error = torch.where(active_mask, new_accum, cleared)
+
+        # 裁剪上限
+        if max_penalty > 0:
+            self.accumulated_error = torch.clamp(self.accumulated_error, max=max_penalty)
+
+        return self.accumulated_error
+
+def track_lin_vel_xy_exp(
+    env: ParkourManagerBasedRLEnv, std: float, command_name: str, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    """Reward tracking of linear velocity commands (xy axes) using exponential kernel."""
+    # extract the used quantities (to enable type-hinting)
+    asset: Articulation = env.scene[asset_cfg.name]
+    # compute the error
+    lin_vel_error = torch.sum(
+        torch.square(env.command_manager.get_command(command_name)[:, :2] - asset.data.root_lin_vel_b[:, :2]),
+        dim=1,
+    )
+    reward = torch.exp(-lin_vel_error / std**2)
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
 def reward_tracking_yaw(     
     env: ParkourManagerBasedRLEnv, 
     parkour_name : str, 
@@ -441,87 +643,6 @@ def reward_collision(
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
     net_contact_forces = contact_sensor.data.net_forces_w_history[:, 0, sensor_cfg.body_ids]
     return torch.sum(1.*(torch.norm(net_contact_forces, dim=-1) > 0.1), dim=1)
-
-
-class reward_symmetric_contact_time(ManagerTermBase):
-    """奖励左右脚对称的接地时间，鼓励协调步态
-    
-    在固定时间窗口内统计左右脚的总接地时间，奖励差异小的情况
-    """
-    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
-        super().__init__(cfg, env)
-        self.contact_sensor: ContactSensor = env.scene.sensors[cfg.params["sensor_cfg"].name]
-        self.sensor_cfg = cfg.params["sensor_cfg"]
-        
-        # 获取脚的配对名称，并转换为索引
-        foot_pairs_names = cfg.params.get("foot_pairs", [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]])
-        
-        # 获取所有body名称列表
-        body_names = self.contact_sensor.body_names
-        body_list = [body_names[idx] for idx in self.sensor_cfg.body_ids]
-        
-        # 将名称对转换为索引对
-        self.foot_pairs = []
-        for left_name, right_name in foot_pairs_names:
-            try:
-                left_idx = body_list.index(left_name)
-                right_idx = body_list.index(right_name)
-                self.foot_pairs.append([left_idx, right_idx])
-            except ValueError:
-                raise ValueError(f"Foot name not found in sensor bodies. Available: {body_list}, Looking for: {left_name}, {right_name}")
-        
-        # 时间窗口大小（控制步数）
-        # 默认250步，如果控制步长为0.02s，则对应5秒
-        self.window_size = cfg.params.get("window_size", 250)
-        
-        # 使用循环缓冲区记录历史接地状态
-        num_feet = len(self.sensor_cfg.body_ids)
-        self.contact_history = torch.zeros(
-            env.num_envs, num_feet, self.window_size, 
-            device=self.device, dtype=torch.bool
-        )
-        self.current_idx = 0
-
-    def reset(self, env_ids: Sequence[int] | None = None) -> None:
-        if env_ids is None:
-            env_ids = slice(None)
-        self.contact_history[env_ids] = False
-
-    def __call__(
-        self,
-        env: ParkourManagerBasedRLEnv,
-        sensor_cfg: SceneEntityCfg,
-        foot_pairs: list = [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]],
-        window_size: int = 250,
-    ) -> torch.Tensor:
-        # 检测脚部是否在地面上
-        net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
-        in_contact = torch.norm(net_contact_forces, dim=-1) > 1.0
-
-        # 更新循环缓冲区
-        self.contact_history[:, :, self.current_idx] = in_contact
-        self.current_idx = (self.current_idx + 1) % self.window_size
-
-        # 统计时间窗口内的总接地时间
-        contact_time = self.contact_history.sum(dim=2).float()  # [num_envs, num_feet]
-
-        # 计算每对脚的对称性奖励
-        pair_rewards = []
-        for left_idx, right_idx in self.foot_pairs:
-            left_time = contact_time[:, left_idx]
-            right_time = contact_time[:, right_idx]
-            # 计算左右脚接地时间差异（占总窗口的比例）
-            diff = torch.abs(left_time - right_time) / self.window_size
-            # 奖励差异小的情况，使用指数衰减
-            # diff在[0,1]范围，当差异为10%时奖励约为0.9，差异为20%时奖励约为0.82
-            pair_reward = torch.exp(-diff * 5.0)
-            pair_rewards.append(pair_reward)
-
-        # 总奖励是所有配对的平均
-        total_reward = torch.stack(pair_rewards).mean(dim=0)
-
-        return total_reward
-
 
 class reward_foot_no_contact_time(ManagerTermBase):
     """惩罚某个脚长时间不落地
@@ -585,77 +706,3 @@ class reward_foot_no_contact_time(ManagerTermBase):
         penalty = torch.tanh(penalty / self.max_no_contact_steps)
         
         return penalty
-
-
-class reward_dual_contact_at_high_speed(ManagerTermBase):
-    """惩罚高速时指定配对的两只脚同时触地
-    
-    当机器人速度大于阈值时，惩罚指定配对的脚同时接地的情况。
-    这鼓励机器人在高速运动时采用更动态的步态（如跑步、小跑）而非静态步态（如慢走）。
-    """
-    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
-        super().__init__(cfg, env)
-        self.contact_sensor: ContactSensor = env.scene.sensors[cfg.params["sensor_cfg"].name]
-        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
-        self.sensor_cfg = cfg.params["sensor_cfg"]
-        
-        # 获取脚的配对名称，并转换为索引
-        foot_pairs_names = cfg.params.get("foot_pairs", [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]])
-        
-        # 获取所有body名称列表
-        body_names = self.contact_sensor.body_names
-        body_list = [body_names[idx] for idx in self.sensor_cfg.body_ids]
-        
-        # 将名称对转换为索引对
-        self.foot_pairs = []
-        for left_name, right_name in foot_pairs_names:
-            try:
-                left_idx = body_list.index(left_name)
-                right_idx = body_list.index(right_name)
-                self.foot_pairs.append([left_idx, right_idx])
-            except ValueError:
-                raise ValueError(f"Foot name not found in sensor bodies. Available: {body_list}, Looking for: {left_name}, {right_name}")
-        
-        # 速度阈值（m/s），超过此值时启用惩罚
-        self.speed_threshold = cfg.params.get("speed_threshold", 0.4)
-        
-        # 接地力阈值（N），超过此值认为脚在地面上
-        self.contact_force_threshold = cfg.params.get("contact_force_threshold", 1.0)
-
-    def __call__(
-        self,
-        env: ParkourManagerBasedRLEnv,
-        sensor_cfg: SceneEntityCfg,
-        asset_cfg: SceneEntityCfg,
-        foot_pairs: list = [["LF_Knee_link", "RF_Knee_link"], ["LH_Knee_link", "RH_Knee_link"]],
-        speed_threshold: float = 0.4,
-        contact_force_threshold: float = 1.0,
-    ) -> torch.Tensor:
-        # 计算机器人的水平速度
-        lin_vel = self.asset.data.root_lin_vel_b[:, :2]  # 取x和y方向速度
-        speed = torch.norm(lin_vel, dim=-1)
-        
-        # 检测脚部是否在地面上
-        net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
-        in_contact = torch.norm(net_contact_forces, dim=-1) > self.contact_force_threshold
-        
-        # 只在速度大于阈值时才惩罚
-        high_speed_mask = speed > self.speed_threshold
-        
-        # 计算每对脚同时接地的惩罚
-        pair_penalties = []
-        for left_idx, right_idx in self.foot_pairs:
-            # 检查该配对的两只脚是否都在地面上
-            both_contact = in_contact[:, left_idx] & in_contact[:, right_idx]
-            pair_penalties.append(both_contact.float())
-        
-        # 计算总惩罚：任何一对脚同时接地都会产生惩罚
-        # 可以选择求和（多对同时接地惩罚更重）或最大值
-        total_penalty = torch.stack(pair_penalties).sum(dim=0)
-        
-        # 应用速度掩码：只在高速时惩罚
-        penalty = total_penalty * high_speed_mask.float()
-        
-        return penalty
-
-

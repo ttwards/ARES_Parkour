@@ -4,7 +4,8 @@ from __future__ import annotations
 import numpy as np
 import random
 import scipy.interpolate as interpolate
-from typing import TYPE_CHECKING
+import trimesh
+from typing import TYPE_CHECKING, Tuple
 from ..utils import parkour_field_to_mesh
 if TYPE_CHECKING:
     from . import extreme_parkour_terrains_cfg
@@ -109,10 +110,16 @@ def parkour_gap_terrain(
         if final_dis_x > width_pixels:
             final_dis_x = width_pixels - 0.5 // cfg.horizontal_scale
         goals[-1] = [final_dis_x, mid_y]
+        # 记录通道两侧的高度突变，用于生成 edge mask
+        edge_mask = np.zeros_like(height_field_raw, dtype=bool)
+        min_height_step = 1  # 由于高度已经离散化到网格单位，1格即可视为台阶
+        height_diff_y = np.diff(height_field_raw, axis=1)
+        edge_mask[:, :-1] |= height_diff_y <= -min_height_step
+        edge_mask[:, 1:] |= height_diff_y >= min_height_step
         height_field_raw = padding_height_field_raw(height_field_raw,cfg)
         if cfg.apply_roughness:
             height_field_raw = random_uniform_terrain(difficulty, cfg, height_field_raw)
-        return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale
+        return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale, edge_mask
 
 @parkour_field_to_mesh
 def parkour_hurdle_terrain(
@@ -292,8 +299,6 @@ def parkour_terrain(
             height_field_raw = random_uniform_terrain(difficulty, cfg, height_field_raw)
         
         return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale
-
-
 
 
 @parkour_field_to_mesh
@@ -481,3 +486,239 @@ def parkour_wall_terrain(
     return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale
 
 
+@parkour_field_to_mesh
+def parkour_slope_terrain(
+    difficulty: float, 
+    cfg: extreme_parkour_terrains_cfg.ExtremeParkourSlopeTerrainCfg,
+    num_goals: int, 
+    )->tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    创建斜坡地形 - 机器人横向穿越斜坡，始终保持一边高一边低
+    Slope terrain - robot traverses across a tilted surface, always with one side higher than the other
+    
+    斜坡沿Y轴方向倾斜，机器人沿X轴方向前进
+    """
+    width_pixels = int(cfg.size[0] / cfg.horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.horizontal_scale)
+    height_field_raw = np.zeros((width_pixels, length_pixels))
+    mid_y = length_pixels // 2
+    
+    # 解析配置参数
+    slope_angle = eval(cfg.slope_angle, {"difficulty": difficulty})
+    slope_length = eval(cfg.slope_length, {"difficulty": difficulty})
+    
+    # 计算斜坡参数
+    # 斜坡角度转换为弧度
+    slope_angle_rad = np.radians(slope_angle)
+    
+    # 计算斜坡的高度差（从一边到另一边）
+    # 地形的总宽度是 cfg.size[1]
+    total_width = cfg.size[1]
+    height_difference = total_width * np.tan(slope_angle_rad)
+    
+    # 转换为像素单位
+    slope_length_pixels = round(slope_length / cfg.horizontal_scale)
+    height_diff_pixels = round(height_difference / cfg.vertical_scale)
+    
+    # 平台参数
+    platform_len = round(cfg.platform_len / cfg.horizontal_scale)
+    platform_height = round(cfg.platform_height / cfg.vertical_scale)
+    
+    # 创建起始平台（水平）
+    height_field_raw[0:platform_len, :] = platform_height
+    
+    # X方向的目标点间距
+    dis_x_min = round(cfg.x_range[0] / cfg.horizontal_scale)
+    dis_x_max = round(cfg.x_range[1] / cfg.horizontal_scale)
+    
+    # 初始化目标点数组
+    goals = np.zeros((num_goals, 2))
+    goal_heights = np.ones((num_goals)) * platform_height
+    goals[0] = [platform_len - 1, mid_y]
+    
+    # 计算斜坡的起始和结束位置
+    slope_start_x = platform_len
+    slope_end_x = min(slope_start_x + slope_length_pixels, width_pixels - platform_len)
+    
+    # 创建斜坡区域
+    # 沿Y轴方向创建高度梯度（从一边低到另一边高）
+    for x in range(slope_start_x, slope_end_x):
+        for y in range(length_pixels):
+            # 计算该点相对于中心线的Y偏移
+            y_offset_from_center = y - mid_y
+            # 根据Y位置计算高度（线性渐变）
+            # y = 0 (最低), y = length_pixels (最高)
+            slope_height = platform_height + (y / length_pixels) * height_diff_pixels - height_diff_pixels / 2
+            height_field_raw[x, y] = slope_height
+    
+    # 创建结束平台（与斜坡中心高度相同）
+    height_field_raw[slope_end_x:, :] = platform_height
+    
+    # 在斜坡区域分布目标点
+    dis_x = slope_start_x
+    for i in range(1, num_goals - 1):
+        if dis_x < slope_end_x:
+            rand_x = np.random.randint(dis_x_min, dis_x_max)
+            dis_x = min(dis_x + rand_x, slope_end_x - 1)
+            
+            # 目标点设置在中心线上
+            goals[i] = [dis_x, mid_y]
+            # 目标高度是该X位置的中心Y位置的高度
+            goal_heights[i] = height_field_raw[dis_x, mid_y]
+        else:
+            break
+    
+    # 最后一个目标点在结束平台上
+    final_dis_x = slope_end_x + np.random.randint(dis_x_min, dis_x_max)
+    if final_dis_x > width_pixels:
+        final_dis_x = width_pixels - round(0.5 / cfg.horizontal_scale)
+    goals[-1] = [final_dis_x, mid_y]
+    goal_heights[-1] = platform_height
+    
+    # 添加边界
+    height_field_raw = padding_height_field_raw(height_field_raw, cfg)
+    
+    # 可选：添加粗糙度（但这会破坏斜坡的平滑性，建议关闭）
+    if cfg.apply_roughness:
+        height_field_raw = random_uniform_terrain(difficulty, cfg, height_field_raw)
+    
+    return height_field_raw, goals * cfg.horizontal_scale, goal_heights * cfg.vertical_scale
+
+
+def create_box_mesh(center, size):
+    """
+    创建一个长方体mesh
+    center: [x, y, z] 中心位置
+    size: [width, depth, height] 尺寸 (x, y, z方向)
+    """
+    w, d, h = size
+    cx, cy, cz = center
+    
+    # 定义8个顶点
+    vertices = np.array([
+        [cx - w/2, cy - d/2, cz - h/2],  # 0: 左下后
+        [cx + w/2, cy - d/2, cz - h/2],  # 1: 右下后
+        [cx + w/2, cy + d/2, cz - h/2],  # 2: 右下前
+        [cx - w/2, cy + d/2, cz - h/2],  # 3: 左下前
+        [cx - w/2, cy - d/2, cz + h/2],  # 4: 左上后
+        [cx + w/2, cy - d/2, cz + h/2],  # 5: 右上后
+        [cx + w/2, cy + d/2, cz + h/2],  # 6: 右上前
+        [cx - w/2, cy + d/2, cz + h/2],  # 7: 左上前
+    ])
+    
+    # 定义12个三角形面（每个面2个三角形）
+    faces = np.array([
+        [0, 1, 2], [0, 2, 3],  # 底面
+        [4, 7, 6], [4, 6, 5],  # 顶面
+        [0, 4, 5], [0, 5, 1],  # 后面
+        [2, 6, 7], [2, 7, 3],  # 前面
+        [0, 3, 7], [0, 7, 4],  # 左面
+        [1, 5, 6], [1, 6, 2],  # 右面
+    ])
+    
+    return trimesh.Trimesh(vertices=vertices, faces=faces)
+
+
+def parkour_hurdle_terrain_trimesh(
+    difficulty: float,
+    cfg,  # extreme_parkour_terrains_cfg.ExtremeParkourHurdleTerrainCfg
+    num_goals: int,
+) -> Tuple[list, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    创建跨栏地形 - 直接生成trimesh
+    柱子和横杆都是正方形横截面
+    
+    返回:
+        meshes: trimesh对象列表
+        origin: 原点坐标
+        goals: 目标点坐标
+        goal_heights: 目标点高度
+    """
+    width = cfg.size[0]
+    length = cfg.size[1]
+    mid_y = length / 2
+    
+    # 解析配置参数 - 所有横截面都是正方形
+    pole_size = eval(cfg.pole_size, {"difficulty": difficulty})  # 柱子边长
+    bar_size = eval(cfg.bar_size, {"difficulty": difficulty})    # 横杆边长
+    
+    hurdle_height_range = eval(cfg.hurdle_height_range, {"difficulty": difficulty})
+    hurdle_height = np.random.uniform(hurdle_height_range[0], hurdle_height_range[1])
+    
+    dis_x_min = cfg.x_range[0]
+    dis_x_max = cfg.x_range[1]
+    dis_y_min = cfg.y_range[0]
+    dis_y_max = cfg.y_range[1]
+    
+    half_valid_width = np.random.uniform(cfg.half_valid_width[0], cfg.half_valid_width[1])
+    
+    platform_len = cfg.platform_len
+    platform_height = cfg.platform_height
+    
+    # 初始化
+    meshes = []
+    dis_x = platform_len
+    goals = np.zeros((num_goals, 2))
+    goal_heights = np.ones(num_goals) * platform_height
+    goals[0] = [platform_len - 1, mid_y]
+    
+    # 创建地面平台
+    ground_mesh = create_box_mesh(
+        center=[width/2, length/2, platform_height/2],
+        size=[width, length, platform_height]
+    )
+    meshes.append(ground_mesh)
+    
+    # 生成多个跨栏
+    for i in range(num_goals - 2):
+        rand_x = np.random.uniform(dis_x_min, dis_x_max)
+        rand_y = np.random.uniform(dis_y_min, dis_y_max)
+        dis_x += rand_x
+        
+        hurdle_center_y = mid_y + rand_y
+        
+        # 左侧柱子 - 正方形横截面
+        left_pole_y = hurdle_center_y - half_valid_width - pole_size/2
+        left_pole_center = [dis_x, left_pole_y, platform_height + hurdle_height/2]
+        left_pole_size = [pole_size, pole_size, hurdle_height]  # 正方形横截面
+        left_pole_mesh = create_box_mesh(left_pole_center, left_pole_size)
+        meshes.append(left_pole_mesh)
+        
+        # 右侧柱子 - 正方形横截面
+        right_pole_y = hurdle_center_y + half_valid_width + pole_size/2
+        right_pole_center = [dis_x, right_pole_y, platform_height + hurdle_height/2]
+        right_pole_size = [pole_size, pole_size, hurdle_height]  # 正方形横截面
+        right_pole_mesh = create_box_mesh(right_pole_center, right_pole_size)
+        meshes.append(right_pole_mesh)
+        
+        # 横杆 - 正方形横截面（长条形）
+        bar_center_z = platform_height + hurdle_height
+        bar_length = right_pole_y - left_pole_y  # 两柱子之间的距离
+        bar_center = [dis_x, hurdle_center_y, bar_center_z]
+        bar_mesh_size = [bar_size, bar_length, bar_size]  # 正方形横截面，沿Y方向延伸
+        bar_mesh = create_box_mesh(bar_center, bar_mesh_size)
+        meshes.append(bar_mesh)
+        
+        # 设置目标点（在跨栏中间的地面）
+        goals[i + 1] = [dis_x - rand_x/2, hurdle_center_y]
+        goal_heights[i + 1] = platform_height
+    
+    # 最终目标
+    final_dis_x = dis_x + np.random.uniform(dis_x_min, dis_x_max)
+    if final_dis_x > width:
+        final_dis_x = width - 0.5
+    goals[-1] = [final_dis_x, mid_y]
+    goal_heights[-1] = platform_height
+    
+    # 调整goals坐标系（相对于中心）
+    goals -= np.array([width/2, length/2])
+    
+    # 计算origin
+    origin = np.array([width/2, length/2, platform_height])
+    
+    # 创建 x_edge_mask (用于trimesh不需要边缘检测，返回全False数组)
+    width_pixels = int(width / cfg.horizontal_scale) + 1
+    length_pixels = int(length / cfg.horizontal_scale) + 1
+    x_edge_mask = np.zeros((width_pixels, length_pixels), dtype=bool)
+    
+    return meshes, origin, goals, goal_heights, x_edge_mask

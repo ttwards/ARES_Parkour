@@ -57,7 +57,7 @@ class TerrainSceneCfg(InteractiveSceneCfg):
             project_uvw=True,
             texture_scale=(0.25, 0.25),
         ),
-        debug_vis=False,
+        debug_vis=True,
     )
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",

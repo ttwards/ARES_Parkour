@@ -9,3 +9,4 @@
 # We still need this file to import the "config" module in the parent package.
 from .config import go2
 from .config import yyy_v1
+from .config import yyy_v2

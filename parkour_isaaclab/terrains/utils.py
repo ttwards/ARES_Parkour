@@ -32,9 +32,21 @@ def parkour_field_to_mesh(func: Callable) -> Callable:
 
         cfg.size = tuple(sub_terrain_size)
         # generate the height field
-        z_gen, goals, goal_heights = func(difficulty, cfg, num_goals)
+        result = func(difficulty, cfg, num_goals)
+        if len(result) == 4:
+            z_gen, goals, goal_heights, custom_edge_mask = result
+        elif len(result) == 3:
+            z_gen, goals, goal_heights = result
+            custom_edge_mask = None
+        else:
+            raise ValueError(
+                "Terrain generation function must return (height_field, goals, goal_heights)"
+                " or add a custom x_edge_mask as the fourth element."
+            )
         goals -= np.array([0.5 * cfg.size[0], 0.5 * cfg.size[1]])
         heights[border_pixels:-border_pixels, border_pixels:-border_pixels] = z_gen
+        if custom_edge_mask is not None and custom_edge_mask.shape != z_gen.shape:
+            raise ValueError("Custom x_edge_mask must match the generated height field shape.")
         # set terrain size back to config
         # convert to trimesh
         vertices, triangles, x_edge_mask = convert_height_field_to_mesh(
@@ -43,6 +55,13 @@ def parkour_field_to_mesh(func: Callable) -> Callable:
         half_edge_width = int(cfg.edge_width_thresh / cfg.horizontal_scale)
         structure = np.ones((half_edge_width*2+1, 1))
         x_edge_mask = binary_dilation(x_edge_mask, structure=structure)
+        if custom_edge_mask is not None:
+            if border_pixels > 0:
+                pad = ((border_pixels, border_pixels), (border_pixels, border_pixels))
+                padded_mask = np.pad(custom_edge_mask.astype(bool), pad, mode="constant")
+            else:
+                padded_mask = custom_edge_mask.astype(bool)
+            x_edge_mask = np.logical_or(x_edge_mask, padded_mask)
         cfg.size = terrain_size
         mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
         if cfg.use_simplified:
