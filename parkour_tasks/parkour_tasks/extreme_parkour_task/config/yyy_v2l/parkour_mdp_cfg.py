@@ -396,13 +396,13 @@ class TeacherRewardsCfg:
     )
     reward_ang_vel_xy = RewTerm(
         func=rewards.reward_ang_vel_xy,
-        weight=-0.04,
+        weight=-0.08,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
         },
         terrain_weight_map={
-            "parkour_wall": 0.7,
-            "parkour_step": 0.8,
+            "parkour_wall": 0.5,
+            "parkour_step": 0.6,
             "parkour_gap": 0.5,
         }
     )
@@ -472,12 +472,13 @@ class TeacherRewardsCfg:
         },
         # 可选：根据地形类型调整权重
         terrain_weight_map={
-            "parkour_flat": 1.3,
+            "parkour_flat": 1.7,
             "parkour_rough": 1.0,
             "parkour_gap": 0.4,
             "parkour_hurdle": 0.5,
             "parkour_step": 0.5,
             "parkour_wall": 0.4,
+            "parkour_slope": 1.2,
         }
     )
     reward_feet_stumble = RewTerm(
@@ -513,19 +514,20 @@ class TeacherRewardsCfg:
     )
     reward_tracking_goal_vel = RewTerm(
         func=rewards.reward_tracking_goal_vel, 
-        weight=4.5,
+        weight=4.8,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "parkour_name": 'base_parkour'
         },
         # 可选：根据地形类型调整权重
         terrain_weight_map={
-            "parkour_flat": 1.6,
-            "parkour_rough": 1.2,
+            "parkour_flat": 2.6,
+            "parkour_rough": 2.2,
             "parkour_gap": 1.2,
-            "parkour_hurdle": 0.9,
+            "parkour_hurdle": 1.9,
             "parkour_step": 1.8,
             "parkour_wall": 1.8,
+            "parkour_slope": 2.8,
         }
     )
 
@@ -540,12 +542,12 @@ class TeacherRewardsCfg:
             "fast_clear_decay": 0.6,
             "normal_decay": 0.97,
             "accumulation_scale": 0.5,
-            "max_penalty": 6.0,
+            "max_penalty": 9.0,
         },
         terrain_weight_map={
             "parkour_flat": 1.0,
             "parkour_rough": 1.0,
-            "parkour_gap": 1.2,  # Gap 地形上卡住的惩罚更重
+            "parkour_gap": 0.8,  # Gap 地形上卡住的惩罚更重
             "parkour_hurdle": 1.0,
             "parkour_step": 1.0,
             "parkour_wall": 1.0,
