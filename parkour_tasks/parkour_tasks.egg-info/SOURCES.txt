@@ -1,8 +1,10 @@
+pyproject.toml
 setup.py
 parkour_tasks/__init__.py
 parkour_tasks/default_cfg.py
 parkour_tasks/yyy_v1_cfg.py
 parkour_tasks/yyy_v2_cfg.py
+parkour_tasks/yyy_v2l_cfg.py
 parkour_tasks.egg-info/PKG-INFO
 parkour_tasks.egg-info/SOURCES.txt
 parkour_tasks.egg-info/dependency_links.txt

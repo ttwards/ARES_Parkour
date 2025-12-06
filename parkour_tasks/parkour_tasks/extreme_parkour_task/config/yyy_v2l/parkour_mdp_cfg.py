@@ -272,7 +272,7 @@ class TeacherRewardsCfg:
             "body_name": "base_link",
         },
         terrain_weight_map={
-            "parkour_gap": 0.2,  # Gap 地形上更强的边缘惩罚
+            "parkour_gap": 0.5,  # Gap 地形上更强的边缘惩罚
             "parkour_wall": 0.0,
         }
     )
@@ -373,8 +373,11 @@ class TeacherRewardsCfg:
     )
     feet_air_time_variance = RewTerm(
         func=rewards.feet_air_time_variance_penalty,
-        weight=-0.,
+        weight=-1.,
         params={"sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Foot_link")},
+        terrain_weight_map={
+            "parkour_gap": 0.4,
+        }
     )
     reward_knee_pos = RewTerm(
         func=rewards.reward_hip_pos,
@@ -420,7 +423,7 @@ class TeacherRewardsCfg:
     )
     reward_action_l2 = RewTerm(
         func=rewards.reward_action_l2,
-        weight=-0.05,  # 惩罚 action 大小，鼓励较小的动作指令
+        weight=-0.09,  # 惩罚 action 大小，鼓励较小的动作指令
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "action_term_name": "joint_pos",  # 指定要惩罚的 action term
@@ -510,7 +513,7 @@ class TeacherRewardsCfg:
     )
     reward_tracking_goal_vel = RewTerm(
         func=rewards.reward_tracking_goal_vel, 
-        weight=4.2,
+        weight=4.5,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "parkour_name": 'base_parkour'
@@ -520,7 +523,7 @@ class TeacherRewardsCfg:
             "parkour_flat": 1.6,
             "parkour_rough": 1.2,
             "parkour_gap": 1.2,
-            "parkour_hurdle": 0.6,
+            "parkour_hurdle": 0.9,
             "parkour_step": 1.8,
             "parkour_wall": 1.8,
         }
@@ -528,11 +531,11 @@ class TeacherRewardsCfg:
 
     reward_cumulative_speed_error = RewTerm(
         func=rewards.reward_cumulative_speed_error,
-        weight=-0.9,
+        weight=-1.2,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
             "command_name": "base_velocity",
-            "speed_threshold": 0.4,
+            "speed_threshold": 0.5,
             "time_threshold_s": 2.0,
             "fast_clear_decay": 0.6,
             "normal_decay": 0.97,
@@ -543,7 +546,7 @@ class TeacherRewardsCfg:
             "parkour_flat": 1.0,
             "parkour_rough": 1.0,
             "parkour_gap": 1.2,  # Gap 地形上卡住的惩罚更重
-            "parkour_hurdle": 0.4,
+            "parkour_hurdle": 1.0,
             "parkour_step": 1.0,
             "parkour_wall": 1.0,
         }
