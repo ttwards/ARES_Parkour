@@ -122,6 +122,7 @@ class TeacherObservationsCfg:
                 # Joint configuration for YYYv2: 12 leg joints for position, 16 joints (legs+wheels) for velocity
                 "pos_joints": [".*_HipA_joint", ".*_HipF_joint", ".*_Knee_joint"],  # 12 leg joints
                 "vel_joints": [".*_HipA_joint", ".*_HipF_joint", ".*_Knee_joint", ".*_Wheel_joint"],  # 16 joints
+                "action_term_name": ".*",
             },
             clip=(-100, 100)
         )
@@ -151,7 +152,7 @@ class StudentObservationsCfg:
             func=observations.ExtremeParkourObservations,
             params={
                 "asset_cfg": SceneEntityCfg("robot"),
-                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Wheel_joint"),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_Wheel_link"),
                 "parkour_name": 'base_parkour',
                 "history_length": 20,
                 "body_name": "base_link",
@@ -294,7 +295,7 @@ class TeacherRewardsCfg:
         func=rewards.reward_dof_error,
         weight=-0.6,
         params={
-            "asset_cfg": SceneEntityCfg("robot"),
+            "asset_cfg": SceneEntityCfg("robot", joint_names=["^(?!.*_Wheel_joint).*$"]),
         },
         terrain_weight_map={
             "parkour_wall": 0.6,
@@ -340,7 +341,7 @@ class TeacherRewardsCfg:
     )
     reward_dof_acc = RewTerm(
         func=rewards.reward_dof_acc, 
-        weight=-2.5e-7,
+        weight=-2.5e-6,
         params={
             "asset_cfg": SceneEntityCfg("robot"),
         },
@@ -388,7 +389,7 @@ class TeacherRewardsCfg:
 
     feet_air_time = RewTerm(
         func=rewards.feet_air_time,
-        weight=3e-5,
+        weight=-5e-6,
         params={
             "command_name": "base_velocity",
             "threshold": 0.5,
@@ -470,7 +471,7 @@ class TeacherRewardsCfg:
     # )
     reward_delta_torques = RewTerm(
         func=rewards.reward_delta_torques, 
-        weight=-2.0e-7,
+        weight=-2.0e-6,
         params={
             "asset_cfg":SceneEntityCfg("robot"),
         },
@@ -542,7 +543,7 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
-            "friction_range": (0.6, 2.0),
+            "friction_range": (0.8, 1.2),
             "num_buckets": 64,
         },
     )
@@ -565,13 +566,14 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
             "mass_distribution_params": (-1., 3.0),
             "operation": "add",
+            "recompute_inertia": True,
         },
     )
     randomize_rigid_body_com = EventTerm(
         func=events.randomize_rigid_body_com,
         mode="startup",
         params={
-            "asset_cfg": SceneEntityCfg("robot", body_names="base_link"),
+            "asset_cfg": SceneEntityCfg("robot", body_names=".*"),
             "com_range": {"x": (-0.02, 0.02), "y": (-0.02, 0.02), "z": (-0.02, 0.02)}
         },
     )

@@ -23,67 +23,79 @@ import cv2
 if TYPE_CHECKING:
     from parkour_isaaclab.envs import ParkourManagerBasedRLEnv
     from isaaclab.managers import ObservationTermCfg
+import re
 
 
 class ExtremeParkourObservations(ManagerTermBase):
 
     def __init__(self, cfg: ObservationTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
+        
+        # 1. 获取基础组件
         self.contact_sensor: ContactSensor = env.scene.sensors['contact_forces']
         self.ray_sensor: RayCaster = env.scene.sensors['height_scanner']
-        self.parkour_event: ParkourEvent = env.parkour_manager.get_term(cfg.params["parkour_name"])
+        # self.depth_camera: RayCasterCamera = env.scene.sensors['depth_camera']
+        self.parkour_event = env.parkour_manager.get_term(cfg.params["parkour_name"])
         self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        
+        # 2. 处理 Body Name
+        target_body_name = cfg.params.get("body_name", "base")
+        self.body_id = self.asset.find_bodies(target_body_name)[0]
+
+        # 3. 解析关节索引 (Pos vs Vel)
         self.sensor_cfg = cfg.params["sensor_cfg"]
-        self.asset_cfg = cfg.params["asset_cfg"]
         self.history_length = cfg.params['history_length']
         
-        # Get joint configuration from params
-        pos_joint_patterns = cfg.params.get("pos_joints", [".*"])  # Default: all joints
-        vel_joint_patterns = cfg.params.get("vel_joints", [])  # Default: empty (same as pos)
+        pos_joint_names = cfg.params.get("pos_joints", [".*"])
+        vel_joint_names = cfg.params.get("vel_joints", [".*"])
         
-        # Get joint indices for position observation
-        self.pos_joint_ids = []
-        for pattern in pos_joint_patterns:
-            joint_ids, _ = self.asset.find_joints(pattern)
-            self.pos_joint_ids.extend(joint_ids)
-        self.pos_joint_ids = sorted(list(set(self.pos_joint_ids)))
+        self.pos_dof_ids, _ = self.asset.find_joints(pos_joint_names)
+        self.vel_dof_ids, _ = self.asset.find_joints(vel_joint_names)
+        self.pos_dof_ids = torch.tensor(self.pos_dof_ids, device=self.device)
+        self.vel_dof_ids = torch.tensor(self.vel_dof_ids, device=self.device)
         
-        # Get joint indices for velocity observation
-        if len(vel_joint_patterns) == 0:
-            # If not specified, use same joints as position
-            self.vel_joint_ids = self.pos_joint_ids
-        else:
-            self.vel_joint_ids = []
-            for pattern in vel_joint_patterns:
-                joint_ids, _ = self.asset.find_joints(pattern)
-                self.vel_joint_ids.extend(joint_ids)
-            self.vel_joint_ids = sorted(list(set(self.vel_joint_ids)))
+        self.num_pos_joints = len(self.pos_dof_ids)
+        self.num_vel_joints = len(self.vel_dof_ids)
+
+        # 4. 收集所有匹配的 Action Terms
+        action_pattern = cfg.params.get("action_term_name", "joint_pos")
+        self.action_terms = []  # 改用列表存储
         
-        # Calculate observation dimensions
-        num_pos_joints = len(self.pos_joint_ids)
-        num_vel_joints = len(self.vel_joint_ids)
-        num_contacts = len(self.sensor_cfg.body_ids)
+        # 遍历所有 terms
+        for name, term in env.action_manager._terms.items():
+            if re.fullmatch(action_pattern, name):
+                self.action_terms.append(term)
         
-        # obs_dim = ang_vel(3) + imu(2) + delta_yaws(3) + commands(3) + env_idx(2) + 
-        #           joint_pos(num_pos_joints) + joint_vel(num_vel_joints) + actions(num_pos_joints) + contacts(num_contacts)
-        obs_dim = 3 + 2 + 3 + 3 + 2 + num_pos_joints + num_vel_joints + num_pos_joints + num_contacts
+        if not self.action_terms:
+            available_terms = list(env.action_manager._terms.keys())
+            raise ValueError(f"ExtremeParkourObservations: 找不到匹配 '{action_pattern}' 的 Action Term! 现有的 Terms: {available_terms}")
         
-        self._obs_history_buffer = torch.zeros(self.num_envs, self.history_length, obs_dim, device=self.device)
+        # --- 累加所有匹配 term 的 action_dim ---
+        self.num_actions = sum(term.action_dim for term in self.action_terms)
+
+        # 5. 计算总观测维度
+        base_obs_dim = 13
+        contact_dim = 4
+        
+        self.obs_dim = (base_obs_dim + 
+                        self.num_pos_joints + 
+                        self.num_vel_joints + 
+                        self.num_actions +
+                        contact_dim)
+
+        # 6. 初始化 Buffer
+        self._obs_history_buffer = torch.zeros(self.num_envs, self.history_length, self.obs_dim, device=self.device)
         self.delta_yaw = torch.zeros(self.num_envs, device=self.device)
         self.delta_next_yaw = torch.zeros(self.num_envs, device=self.device)
-        self.measured_heights = torch.zeros(self.num_envs, 132, device=self.device)
+        self.measured_heights = torch.zeros(self.num_envs, self.ray_sensor.num_rays, device=self.device)
         self.env = env
-        
-        # Get body_name from config, default to 'base' if not specified
-        body_name = cfg.params.get("body_name", "base")
-        self.body_id = self.asset.find_bodies(body_name)[0]
         
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         self._obs_history_buffer[env_ids, :, :] = 0. 
 
     def __call__(
         self,
-        env: ParkourManagerBasedRLEnv,
+        env: ParkourManagerBasedRLEnv,        
         asset_cfg: SceneEntityCfg,
         sensor_cfg: SceneEntityCfg,
         parkour_name: str,
@@ -91,55 +103,61 @@ class ExtremeParkourObservations(ManagerTermBase):
         body_name: str = "base",
         pos_joints: list = None,
         vel_joints: list = None,
-    ) -> torch.Tensor:
-
+        action_term_name: str = None, 
+        ) -> torch.Tensor:
+        
         terrain_names = self.parkour_event.env_per_terrain_name
-        env_idx_tensor = torch.tensor((terrain_names != 'parkour_flat')).to(dtype=torch.bool, device=self.device)
-        invert_env_idx_tensor = torch.tensor((terrain_names == 'parkour_flat')).to(dtype=torch.bool, device=self.device)
+        env_idx_tensor = torch.tensor((terrain_names != 'parkour_flat')).to(dtype = torch.bool, device=self.device)
+        invert_env_idx_tensor = torch.tensor((terrain_names == 'parkour_flat')).to(dtype = torch.bool, device=self.device)
         roll, pitch, yaw = euler_xyz_from_quat(self.asset.data.root_quat_w)
         imu_obs = torch.stack((wrap_to_pi(roll), wrap_to_pi(pitch)), dim=1).to(self.device)
+        
         if env.common_step_counter % 5 == 0:
             self.delta_yaw = self.parkour_event.target_yaw - wrap_to_pi(yaw)
             self.delta_next_yaw = self.parkour_event.next_target_yaw - wrap_to_pi(yaw)
             self.measured_heights = self._get_heights()
+            
         commands = env.command_manager.get_command('base_velocity')
         
-        # Get joint data using configured indices
-        joint_pos = (self.asset.data.joint_pos[:, self.pos_joint_ids] -
-                     self.asset.data.default_joint_pos[:, self.pos_joint_ids])
-        joint_vel = self.asset.data.joint_vel[:, self.vel_joint_ids] * 0.05
-        actions = env.action_manager.get_term('joint_pos').action_history_buf[:, -1]
+        all_joint_pos = self.asset.data.joint_pos - self.asset.data.default_joint_pos
+        all_joint_vel = self.asset.data.joint_vel
+        
+        filtered_joint_pos = all_joint_pos[:, self.pos_dof_ids] 
+        filtered_joint_vel = all_joint_vel[:, self.vel_dof_ids] * 0.05 
+        
+        # --- 关键修改：拼接所有 Action Terms 的历史 ---
+        # 遍历列表，取出每个 term 的 buffer 并 cat 起来
+        action_history_list = [term.action_history_buf[:, -1] for term in self.action_terms]
+        combined_action_history = torch.cat(action_history_list, dim=-1)
         
         obs_buf = torch.cat((
-            self.asset.data.root_ang_vel_b * 0.25,  # [N, 3]
-            imu_obs,  # [N, 2]
-            0 * self.delta_yaw[:, None],  # [N, 1]
-            self.delta_yaw[:, None],  # [N, 1]
-            self.delta_next_yaw[:, None],  # [N, 1]
-            0 * commands[:, 0:2],  # [N, 2]
-            commands[:, 0:1],  # [N, 1]
-            env_idx_tensor,  # [N, 1]
-            invert_env_idx_tensor,  # [N, 1]
-            joint_pos,  # [N, num_pos_joints]
-            joint_vel,  # [N, num_vel_joints]
-            actions,  # [N, num_pos_joints]
-            self._get_contact_fill(),  # [N, num_contacts]
-        ), dim=-1)
+                            self.asset.data.root_ang_vel_b * 0.25,
+                            imu_obs,
+                            0 * self.delta_yaw[:, None],
+                            self.delta_yaw[:, None],
+                            self.delta_next_yaw[:, None],
+                            0 * commands[:, 0:2],
+                            commands[:, 0:1],
+                            env_idx_tensor,
+                            invert_env_idx_tensor,
+                            filtered_joint_pos,
+                            filtered_joint_vel,
+                            combined_action_history,
+                            self._get_contact_fill(),
+                            ), dim=-1)
+
         priv_explicit = self._get_priv_explicit()
         priv_latent = self._get_priv_latent()
-        # obs_buf: dynamic size based on joint config
-        # measured_heights: 132
-        # priv_explicit: 9
-        # priv_latent: 5 + 2 * num_pos_joints (mass(4) + friction(1) + stiffness + damping)
-        # history: obs_dim * history_length
-        observations = torch.cat([
-            obs_buf,
-            self.measured_heights,
-            priv_explicit,
-            priv_latent,
-            self._obs_history_buffer.view(self.num_envs, -1)
-        ], dim=-1)
+
+        observations = torch.cat([obs_buf,
+                                  self.measured_heights,
+                                  priv_explicit,
+                                  priv_latent,
+                                  self._obs_history_buffer.view(self.num_envs, -1)
+                                  ], dim=-1)
+
         obs_buf[:, 6:8] = 0
+
         self._obs_history_buffer = torch.where(
             (env.episode_length_buf <= 1)[:, None, None], 
             torch.stack([obs_buf] * self.history_length, dim=1),
@@ -148,47 +166,48 @@ class ExtremeParkourObservations(ManagerTermBase):
                 obs_buf.unsqueeze(1)
             ], dim=1)
         )
-        return observations 
-
-    def _get_contact_fill(
-        self,
-        ):
-        contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids] #(N, 4, 3)
+        return observations
+    
+    # ... 下面的辅助函数保持不变 (确保包含了 Epsilon 修复) ...
+    def _get_contact_fill(self):
+        contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids] 
         contact = torch.norm(contact_forces, dim=-1) > 2.
-        previous_contact_forces = self.contact_sensor.data.net_forces_w_history[:, -1, self.sensor_cfg.body_ids] # N, 4, 3
+        previous_contact_forces = self.contact_sensor.data.net_forces_w_history[:, -1, self.sensor_cfg.body_ids]
         last_contacts = torch.norm(previous_contact_forces, dim=-1) > 2.
         contact_filt = torch.logical_or(contact, last_contacts) 
         return (contact_filt.float()-0.5).to(self.device)
-    
-    def _get_priv_explicit(
-        self,
-        ):
+
+    def _get_priv_explicit(self):
         base_lin_vel = self.asset.data.root_lin_vel_b 
         return torch.cat((base_lin_vel * 2.0,
                         0 * base_lin_vel,
                         0 * base_lin_vel), dim=-1).to(self.device)
     
     def _get_priv_latent(self):
-        body_mass = self.asset.root_physx_view.get_masses()[:, self.body_id].to(self.device)
-        body_com = self.asset.data.com_pos_b[:, self.body_id, :].to(self.device).squeeze(1)
-        mass_params_tensor = torch.cat([body_mass, body_com], dim=-1).to(self.device)
+        epsilon = 1e-6
+        joint_stiffness = self.asset.data.joint_stiffness.to(self.device)
+        default_joint_stiffness = self.asset.data.default_joint_stiffness.to(self.device)
+        joint_damping = self.asset.data.joint_damping.to(self.device)
+        default_joint_damping = self.asset.data.default_joint_damping.to(self.device)
+
+        stiffness_ratio = (joint_stiffness / (default_joint_stiffness + epsilon)) - 1
+        damping_ratio = (joint_damping / (default_joint_damping + epsilon)) - 1
+        
+        body_mass = self.asset.root_physx_view.get_masses()[:,self.body_id].to(self.device)
+        body_com = self.asset.data.com_pos_b[:,self.body_id,:].to(self.device).squeeze(1)
+        mass_params_tensor = torch.cat([body_mass, body_com],dim=-1).to(self.device)
         friction_coeffs_tensor = self.asset.root_physx_view.get_material_properties()[:, 0, 0]
-        
-        # Use only position joints for stiffness and damping
-        joint_stiffness = self.asset.data.joint_stiffness[:, self.pos_joint_ids].to(self.device)
-        default_joint_stiffness = self.asset.data.default_joint_stiffness[:, self.pos_joint_ids].to(self.device)
-        joint_damping = self.asset.data.joint_damping[:, self.pos_joint_ids].to(self.device)
-        default_joint_damping = self.asset.data.default_joint_damping[:, self.pos_joint_ids].to(self.device)
-        
+
         return torch.cat((
             mass_params_tensor,
             friction_coeffs_tensor.unsqueeze(1).to(self.device),
-            (joint_stiffness / default_joint_stiffness) - 1,
-            (joint_damping / default_joint_damping) - 1
+            stiffness_ratio, 
+            damping_ratio
         ), dim=-1).to(self.device)
-    
+        
     def _get_heights(self):
-        return torch.clip(self.ray_sensor.data.pos_w[:, 2].unsqueeze(1) - self.ray_sensor.data.ray_hits_w[..., 2] - 0.3, -1, 1).to(self.device)
+        return torch.clip(self.ray_sensor.data.pos_w[:, 2].unsqueeze(1) - self.ray_sensor.data.ray_hits_w[..., 2] - 0.3, -2, 2).to(self.device)
+
 
 class image_features(ManagerTermBase):
     

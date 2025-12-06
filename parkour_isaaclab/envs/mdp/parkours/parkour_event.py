@@ -140,7 +140,7 @@ class ParkourEvent(ParkourTerm):
 
         self.dis_to_start_pos = torch.norm(start_pos - self.robot.data.root_pos_w[env_ids, :2], dim=1)
         threshold = self.env.command_manager.get_command("base_velocity")[env_ids, 0] * self.episode_length_s
-        move_up = self.dis_to_start_pos > 0.8*threshold
+        move_up = self.dis_to_start_pos > 0.7*threshold
         move_down = self.dis_to_start_pos < 0.4*threshold
 
         robot_root_pos_w = self.robot.data.root_pos_w[:, :2] - self.env_origins[:, :2]

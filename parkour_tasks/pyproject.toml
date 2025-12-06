@@ -1,0 +1,4 @@
+[build-system]
+# 这里列出 setup.py 运行所必须的所有库
+requires = ["setuptools", "wheel", "toml", "numpy"]
+build-backend = "setuptools.build_meta"

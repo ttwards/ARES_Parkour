@@ -80,17 +80,17 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
     slope_threshold=1.5,
     difficulty_range=(0.0, 1.0),
     use_cache=False,
-    curriculum= True,
+    curriculum=True,
     sub_terrains={
         # "parkour_gap": ExtremeParkourGapTerrainCfg(
-        #                 proportion=0.25,
+        #                 proportion=0.2,
         #                 apply_roughness=True,
         #                 x_range = (0.8, 1.5),
         #                 half_valid_width = (0.6, 1.2),
         #                 gap_size = '0.1 + 0.4*difficulty'
         #                 ),
         "parkour_hurdle": ExtremeParkourHurdleTriMeshTerrainCfg(
-            proportion=0.25,
+            proportion=0.2,
             apply_roughness=False,
             pole_size='0.10 - 0.05 * difficulty',
             bar_size='0.10 - 0.05 * difficulty',
@@ -100,20 +100,20 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
             half_valid_width=(0.85, 1.15),
         ),
         "parkour_flat": ExtremeParkourHurdleTerrainCfg(
-                            proportion=0.25,
-                            apply_roughness=True,
-                            apply_flat=True,
-                            x_range = (1.2, 2.2),
-                            half_valid_width = (0.4,0.8),
-                            hurdle_height_range= '0.1+0.1*difficulty, 0.15+0.15*difficulty'
-                        ),
+            proportion=0.2,
+            apply_roughness=True,
+            apply_flat=True,
+            x_range=(1.2, 2.2),
+            half_valid_width=(0.4, 0.8),
+            hurdle_height_range='0.1+0.1*difficulty, 0.15+0.15*difficulty'
+        ),
         "parkour_step": ExtremeParkourStepTerrainCfg(
-                        proportion=0.25,
-                        apply_roughness=True,
-                        x_range = (0.3,1.5),
-                        half_valid_width = (0.5, 1),
-                        step_height = '0.1 + 0.25*difficulty'
-                        ),
+            proportion=0.2,
+            apply_roughness=True,
+            x_range=(0.3, 1.5),
+            half_valid_width=(0.5, 1.0),
+            step_height='0.1 + 0.25*difficulty'
+        ),
         # "parkour": ExtremeParkourTerrainCfg(
         #                 proportion=0.2,
         #                 apply_roughness=True,
@@ -128,12 +128,22 @@ PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
         #                 apply_roughness=True,
         #                 ),
         "parkour_wall": ExtremeParkourWallTerrainCfg(
-                        proportion=0.25,  # 设为 0.2 来启用这个地形
-                        apply_roughness=False,
-                        x_range = (1.5, 2.0),
-                        half_valid_width = (0.4, 0.8),
-                        wall_thickness = '0.14 - 0.1*difficulty',
-                        wall_height_range = '0.16 + 0.1*difficulty, 0.2 + 0.1*difficulty'
-                        ),
+            proportion=0.2,
+            apply_roughness=False,
+            x_range=(1.5, 2.0),
+            half_valid_width=(0.4, 0.8),
+            wall_thickness='0.14 - 0.1*difficulty',
+            wall_height_range='0.16 + 0.1*difficulty, 0.2 + 0.1*difficulty'
+        ),
+        # 新增：侧向进入的多段斜坡地形
+        "parkour_slope": ExtremeParkourSlopeTerrainCfg(
+            proportion=0.2,           # 比例你可以之后自己调
+            apply_roughness=True,      # 可以关掉来纯看斜坡效果
+            # 斜率范围（沿 y 方向的高度变化，相对“世界坐标”的 m/m）
+            slope_range='-0.15 - 0.15 * difficulty, 0.15 + 0.15 * difficulty',
+            # 每一段斜坡在 x 方向（机器人行走方向）的长度范围
+            # segment_width_range='0.8 + 0.2 * difficulty, 1.6 + 0.4 * difficulty',
+            segment_width_range='2.0, 2.0',
+        ),
     },
 )

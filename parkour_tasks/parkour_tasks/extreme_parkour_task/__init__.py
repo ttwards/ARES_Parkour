@@ -10,3 +10,4 @@
 from .config import go2
 from .config import yyy_v1
 from .config import yyy_v2
+from .config import yyy_v2l

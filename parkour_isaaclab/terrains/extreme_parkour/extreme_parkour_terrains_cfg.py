@@ -18,8 +18,13 @@ class ExtremeParkourRoughTerrainCfg(ParkourSubTerrainBaseCfg):
 @configclass
 class ExtremeParkourGapTerrainCfg(ExtremeParkourRoughTerrainCfg):
     function = extreme_parkour_terrians.parkour_gap_terrain
+    horizontal_scale: float = 0.02
+    slope_threshold: float | None = 3.75
+    downsampled_scale: float | None = None
     gap_size: str = '0.1 + 0.7*difficulty'
-    gap_depth: tuple[float, float] = (0.2, 1) 
+    gap_width: str | None = None
+    gap_depth: tuple[float, float] = (2.2, 2.6) 
+    height_drop_per_gap: str | float = '0.05 + 0.05 * difficulty'
 
 @configclass
 class ExtremeParkourHurdleTerrainCfg(ExtremeParkourRoughTerrainCfg):
@@ -64,34 +69,36 @@ class ExtremeParkourWallTerrainCfg(ExtremeParkourRoughTerrainCfg):
 class ExtremeParkourHurdleTriMeshTerrainCfg(ExtremeParkourRoughTerrainCfg):
     """Configuration for hurdle terrain with trimesh generation - robot needs to crawl under the bar."""
     function = extreme_parkour_terrians.parkour_hurdle_terrain_trimesh
-    
+
     # 正方形横截面尺寸
     pole_size: str = '0.08 + 0.04 * difficulty'  # 柱子边长 (米)
     bar_size: str = '0.06 + 0.03 * difficulty'   # 横杆边长 (米)
-    
+
     # 跨栏整体高度 (从地面到横杆底部的距离)
     hurdle_height_range: str = '0.25 + 0.15 * difficulty, 0.35 + 0.25 * difficulty'
-    
+
     # 跨栏间距和位置
     x_range: tuple[float, float] = (1.5, 2.5)  # 跨栏之间的纵向距离 (米)
     y_range: tuple[float, float] = (-0.3, 0.3)  # 跨栏的横向偏移范围 (米)
-    
+
     # 通道参数
     half_valid_width: tuple[float, float] = (0.4, 0.6)  # 两个柱子之间通道的半宽度 (米)
 
 @configclass
 class ExtremeParkourSlopeTerrainCfg(ExtremeParkourRoughTerrainCfg):
     """
-    Configuration for slope terrain - robot traverses across a tilted surface.
-    机器人横向穿越斜坡，始终保持一边高一边低
+    侧向进入斜坡地形：
+    - 地面整体是左右倾斜的“斜坡带”
+    - 机器人沿 x 方向前进，沿着等高线行走，不直接爬坡
+    - 多个斜坡段在 x 方向串联，每段斜率与长度都从范围中采样
     """
     function = extreme_parkour_terrians.parkour_slope_terrain
-    
-    # 斜坡角度（度数）- 斜坡相对于水平面的倾斜角度
-    slope_angle: str = '5 + 15 * difficulty'  # 范围: 5-20度
-    
-    # 斜坡长度（米）- 机器人需要横向穿越的距离（X方向）
-    slope_length: str = '3.0 + 2.0 * difficulty'  # 范围: 3-5米
-    
-    # X方向的目标点间距
-    x_range: tuple[float, float] = (0.8, 1.5)  # 目标点之间的距离（米）
+
+    # 斜率范围（单位：m 高度 / m 横向），允许正负，难度越高斜率范围略扩大
+    # 例如 difficulty=1 时，大约在 [-0.2, 0.2] 左右
+    slope_range: str = '-0.15 - 0.05 * difficulty, 0.15 + 0.05 * difficulty'
+
+    # 每一段斜坡在机器人行走方向上的长度范围（单位：m）
+    # 难度越高，平均段长略变大
+    segment_width_range: str = '0.8 + 0.2 * difficulty, 1.6 + 0.4 * difficulty'
+    noise_range: tuple[float, float] = (0.01, 0.1)

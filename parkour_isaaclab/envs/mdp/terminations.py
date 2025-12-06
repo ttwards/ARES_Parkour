@@ -39,5 +39,5 @@ def terminate_episode(
     reset_buf |= time_out_buf
     reset_buf |= roll_cutoff
     reset_buf |= pitch_cutoff
-    reset_buf |= height_cutoff
+    # reset_buf |= height_cutoff
     return reset_buf
