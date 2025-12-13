@@ -5,10 +5,11 @@ from typing import TYPE_CHECKING
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
 from isaaclab.sensors import ContactSensor
 from isaaclab.assets import Articulation
-from isaaclab.utils.math  import euler_xyz_from_quat, wrap_to_pi, quat_apply
+from isaaclab.utils.math import quat_apply, quat_conjugate
 from parkour_isaaclab.envs.mdp.parkours import ParkourEvent 
 from collections.abc import Sequence
 import isaaclab.utils.math as math_utils
+from isaaclab.sensors import RayCaster
 
 if TYPE_CHECKING:
     from parkour_isaaclab.envs import ParkourManagerBasedRLEnv
@@ -547,7 +548,7 @@ def reward_tracking_goal_vel(
     proj_vel = torch.sum(target_vel * cur_vel, dim=-1)
     command_vel = env.command_manager.get_command('base_velocity')[:, 0]
     rew_move = torch.minimum(proj_vel, command_vel) / (command_vel + 1e-5)
-    return rew_move
+    return rew_move * (parkour_event.terrain.terrain_levels / 3.0 + 1)
 
 class reward_cumulative_speed_error(ManagerTermBase):
     """
@@ -913,3 +914,320 @@ def reward_terrain_level(
 ) -> torch.Tensor:
     parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
     return parkour_event.terrain.terrain_levels.float() / parkour_event.terrain.max_terrain_level
+
+
+class reward_foot_clearance(ManagerTermBase):
+    """奖励足端在无接触且离地高度超过阈值时抬腿。
+    
+    使用4个独立的 RayCaster sensor 从每个足端向下发射光线测量离地高度。
+    
+    奖励逻辑：
+    - 当足端无接触（no contact）且离地高度 > threshold 时给予正奖励
+    - 使用 tanh 函数平滑奖励值，避免过大奖励
+    
+    需要在 scene 中配置 foot_scanner_LF/RF/LR/RR 四个 RayCaster sensor。
+    """
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        # 接触力传感器
+        self.contact_sensor: ContactSensor = env.scene.sensors[cfg.params["contact_sensor_cfg"].name]
+        self.contact_sensor_cfg = cfg.params["contact_sensor_cfg"]
+        
+        # 4个足端高度 RayCaster 传感器
+        self.foot_scanners = [
+            env.scene.sensors["foot_scanner_LF"],
+            env.scene.sensors["foot_scanner_RF"],
+            env.scene.sensors["foot_scanner_LR"],
+            env.scene.sensors["foot_scanner_RR"],
+        ]
+        
+        # 参数
+        self.height_threshold = cfg.params.get("height_threshold", 0.01)
+        self.tanh_scale = cfg.params.get("tanh_scale", 40.0)
+        self.contact_threshold = cfg.params.get("contact_threshold", 1.0)
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        contact_sensor_cfg: SceneEntityCfg,
+        height_threshold: float = 0.01,
+        tanh_scale: float = 40.0,
+        contact_threshold: float = 1.0,
+    ) -> torch.Tensor:
+        """计算足端离地奖励
+        
+        Args:
+            height_threshold: 离地高度阈值（米），超过此值开始奖励
+            tanh_scale: tanh缩放因子，控制饱和速度
+            contact_threshold: 接触力阈值（N），低于此值认为无接触
+        
+        Returns:
+            每个环境的奖励值
+        """
+        # 1. 从4个 RayCaster 获取足端离地高度
+        clearances = []
+        for scanner in self.foot_scanners:
+            # pos_w: (N, 3), ray_hits_w: (N, 1, 3)
+            foot_z = scanner.data.pos_w[:, 2]
+            hit_z = scanner.data.ray_hits_w[:, 0, 2]
+            clearances.append(foot_z - hit_z)
+        
+        # 堆叠成 (N, 4)
+        clearance = torch.stack(clearances, dim=1)
+        
+        # 2. 检测足端是否接触地面
+        net_contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.contact_sensor_cfg.body_ids]
+        contact_force_mag = torch.norm(net_contact_forces, dim=-1)  # (N, 4)
+        no_contact = contact_force_mag < self.contact_threshold  # (N, 4)
+        
+        # 3. 计算奖励：no contact 且 height > threshold
+        height_above_threshold = clearance - self.height_threshold
+        raw_reward = torch.tanh(height_above_threshold * self.tanh_scale)
+        raw_reward = torch.clamp(raw_reward, min=0.0)
+        
+        # 只有在无接触时才给奖励
+        masked_reward = raw_reward * no_contact.float()
+        
+        # 4. 对所有足端求和
+        total_reward = torch.sum(masked_reward, dim=-1)
+        
+        command_vel = env.command_manager.get_command('base_velocity')[:, 0]
+
+        return total_reward * (command_vel > 0.4)
+
+
+def penalty_both_front_feet_airborne(
+    env: ParkourManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    front_feet_names: list[str] = ["LF_Foot_link", "RF_Foot_link"],
+    contact_force_threshold: float = 1.0,
+) -> torch.Tensor:
+    """
+    惩罚前两只脚同时离地的情况。
+    
+    Args:
+        env: 环境实例
+        sensor_cfg: 接触传感器配置
+        front_feet_names: 前脚的名称列表，默认为左前脚和右前脚
+        contact_force_threshold: 接触力阈值（N），低于此值认为脚离地
+    
+    Returns:
+        惩罚值张量 shape: (num_envs,)，当两只前脚同时离地时返回1.0，否则返回0.0
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    
+    # 获取前脚的body_ids
+    front_feet_indices = contact_sensor.find_bodies(front_feet_names)[0]
+    
+    # 获取接触力 (N, num_bodies, 3)
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, 0, front_feet_indices]
+    
+    # 计算接触力大小 (N, num_front_feet)
+    contact_force_mag = torch.norm(net_contact_forces, dim=-1)
+    
+    # 判断是否离地：接触力 < 阈值
+    is_airborne = contact_force_mag < contact_force_threshold  # (N, 2)
+    
+    # 判断两只前脚是否同时离地
+    both_airborne = torch.all(is_airborne, dim=-1)  # (N,)
+    
+    # 返回惩罚：同时离地返回1.0，否则返回0.0
+    return both_airborne.float()
+
+
+def penalty_both_rear_feet_airborne(
+    env: ParkourManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg,
+    rear_feet_names: list[str] = ["LR_Foot_link", "RR_Foot_link"],
+    contact_force_threshold: float = 1.0,
+) -> torch.Tensor:
+    """
+    惩罚后两只脚同时离地的情况。
+    
+    Args:
+        env: 环境实例
+        sensor_cfg: 接触传感器配置
+        rear_feet_names: 后脚的名称列表，默认为左后脚和右后脚
+        contact_force_threshold: 接触力阈值（N），低于此值认为脚离地
+    
+    Returns:
+        惩罚值张量 shape: (num_envs,)，当两只后脚同时离地时返回1.0，否则返回0.0
+    """
+    contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]
+    
+    # 获取后脚的body_ids
+    rear_feet_indices = contact_sensor.find_bodies(rear_feet_names)[0]
+    
+    # 获取接触力 (N, num_bodies, 3)
+    net_contact_forces = contact_sensor.data.net_forces_w_history[:, 0, rear_feet_indices]
+    
+    # 计算接触力大小 (N, num_rear_feet)
+    contact_force_mag = torch.norm(net_contact_forces, dim=-1)
+    
+    # 判断是否离地：接触力 < 阈值
+    is_airborne = contact_force_mag < contact_force_threshold  # (N, 2)
+    
+    # 判断两只后脚是否同时离地
+    both_airborne = torch.all(is_airborne, dim=-1)  # (N,)
+    
+    # 返回惩罚：同时离地返回1.0，否则返回0.0
+    return both_airborne.float()
+
+
+class reward_feet_position_deviation(ManagerTermBase):
+    """惩罚脚部位置偏离默认位置（仅计算XY方向）
+    
+    该奖励函数计算脚部相对于base_link的XY平面位置偏差，鼓励机器人保持自然的站姿。
+    通过惩罚脚部位置偏离初始默认位置，可以：
+    - 防止脚部过度伸展或收缩
+    - 保持稳定的站姿
+    - 避免不自然的腿部配置
+    
+    计算方式：
+    1. 获取每个脚在body坐标系下相对于base_link的位置
+    2. 与默认位置（初始重置时的位置）进行比较
+    3. 只计算XY平面的L2距离并进行惩罚（忽略Z方向）
+    """
+
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self.asset_cfg = cfg.params["asset_cfg"]
+
+        # 获取脚部的body_ids
+        feet_pattern = cfg.params.get("feet_pattern", ".*_Foot_link")
+        self.feet_body_ids = self.asset.find_bodies(feet_pattern)[0]
+
+        # 存储默认的脚部相对位置（在body坐标系下）
+        # 这将在第一次reset时初始化
+        self.default_feet_pos_b = None
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        """在reset时记录默认的脚部位置"""
+        if env_ids is None:
+            env_ids = slice(None)
+
+        # 如果是第一次初始化，记录所有环境的默认脚部位置
+        if self.default_feet_pos_b is None:
+            # 获取base_link的世界位置和旋转
+            base_pos_w = self.asset.data.root_pos_w
+            base_quat_w = self.asset.data.root_quat_w
+
+            # 获取脚部的世界位置
+            feet_pos_w = self.asset.data.body_pos_w[:, self.feet_body_ids, :]
+
+            # 转换到body坐标系
+            feet_pos_rel = feet_pos_w - base_pos_w.unsqueeze(1)
+            feet_pos_b = torch.zeros_like(feet_pos_rel)
+            for i in range(len(self.feet_body_ids)):
+                feet_pos_b[:, i, :] = quat_apply(
+                    math_utils.quat_conjugate(base_quat_w),
+                    feet_pos_rel[:, i, :]
+                )
+
+            self.default_feet_pos_b = feet_pos_b.clone()
+
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        feet_pattern: str = ".*_Foot_link",
+    ) -> torch.Tensor:
+        """计算脚部位置偏差惩罚（仅XY方向）
+
+        Returns:
+            惩罚值张量 shape: (num_envs,)，值越大表示偏差越大
+        """
+        # 确保已经初始化默认位置
+        if self.default_feet_pos_b is None:
+            return torch.zeros(env.num_envs, device=self.device)
+
+        # 获取当前base_link的位置和旋转
+        base_pos_w = self.asset.data.root_pos_w
+        base_quat_w = self.asset.data.root_quat_w
+
+        # 获取当前脚部的世界位置
+        feet_pos_w = self.asset.data.body_pos_w[:, self.feet_body_ids, :]
+
+        # 转换到body坐标系
+        feet_pos_rel = feet_pos_w - base_pos_w.unsqueeze(1)
+        current_feet_pos_b = torch.zeros_like(feet_pos_rel)
+        for i in range(len(self.feet_body_ids)):
+            current_feet_pos_b[:, i, :] = quat_apply(
+                math_utils.quat_conjugate(base_quat_w),
+                feet_pos_rel[:, i, :]
+            )
+
+        # 只计算XY方向的偏差（忽略Z方向）
+        deviation_xy = torch.norm(
+            current_feet_pos_b[:, :, :2] - self.default_feet_pos_b[:, :, :2],
+            dim=-1
+        )  # (N, num_feet)
+
+        # 对所有脚的偏差求和
+        total_deviation = torch.sum(deviation_xy, dim=-1)  # (N,)
+
+        return total_deviation
+
+
+class joint_power_variance(ManagerTermBase):
+    """计算关节间功率方差：先计算每个关节在2秒窗口内的平均功率，然后计算关节之间的方差"""
+    
+    def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
+        self.asset_cfg = cfg.params["asset_cfg"]
+        
+        # 时间窗口参数
+        self.window_time = cfg.params.get("window_time", 2.0)  # 默认2秒
+        self.dt = env.cfg.decimation * env.cfg.sim.dt  # 控制步长
+        self.window_size = max(int(self.window_time / self.dt), 1)  # 转换为步数
+        
+        # 获取关节数量
+        num_joints = len(self.asset_cfg.joint_ids)
+        
+        # 创建循环缓冲区存储每个关节在每个时刻的功率 (N, window_size, num_joints)
+        self.power_history = torch.zeros(
+            env.num_envs, self.window_size, num_joints,
+            device=self.device, dtype=torch.float32
+        )
+        self.current_idx = 0
+        
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self.power_history[env_ids] = 0.0
+    
+    def __call__(
+        self,
+        env: ParkourManagerBasedRLEnv,
+        asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+        window_time: float = 2.0,
+    ) -> torch.Tensor:
+        """计算关节间的功率方差（基于窗口内平均功率）
+        
+        Args:
+            env: 环境实例
+            asset_cfg: 资产配置
+            window_time: 时间窗口大小（秒）
+            
+        Returns:
+            每个环境的关节间功率方差
+        """
+        # 计算当前时刻每个关节的功率 (N, num_joints)
+        current_power = torch.abs(
+            self.asset.data.joint_vel[:, self.asset_cfg.joint_ids] * 
+            self.asset.data.applied_torque[:, self.asset_cfg.joint_ids]
+        )
+        
+        # 更新循环缓冲区
+        self.power_history[:, self.current_idx, :] = current_power
+        self.current_idx = (self.current_idx + 1) % self.window_size
+        
+        # 计算每个关节在时间窗口内的平均功率 (N, num_joints)
+        avg_power_per_joint = torch.mean(self.power_history, dim=1)
+        
+        # 计算关节之间的方差 (N,)
+        variance_across_joints = torch.var(avg_power_per_joint, dim=1)
+        
+        return variance_across_joints
