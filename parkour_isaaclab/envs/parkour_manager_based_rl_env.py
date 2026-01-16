@@ -15,9 +15,10 @@ from isaaclab.managers import CommandManager, CurriculumManager, TerminationMana
 from isaaclab.envs.common import VecEnvStepReturn
 from collections.abc import Sequence
 from typing import Any, ClassVar
-import math, torch   
-import numpy as np 
+import math, torch
+import numpy as np
 from parkour_isaaclab.managers.parkour_reward_manager import ParkourRewardManager
+from parkour_isaaclab.envs.joint_torque_monitor import JointTorqueMonitor
 
 class ParkourManagerBasedRLEnv(ParkourManagerBasedEnv, gym.Env):
     is_vector_env: ClassVar[bool] = True 
@@ -71,6 +72,9 @@ class ParkourManagerBasedRLEnv(ParkourManagerBasedEnv, gym.Env):
 
     def setup_manager_visualizers(self):
         """Creates live visualizers for manager terms."""
+        # Create joint torque monitor
+        self.joint_torque_monitor = JointTorqueMonitor(self)
+
         self.manager_visualizers = {
             "action_manager": ManagerLiveVisualizer(manager=self.action_manager),
             "observation_manager": ManagerLiveVisualizer(manager=self.observation_manager),
@@ -79,6 +83,7 @@ class ParkourManagerBasedRLEnv(ParkourManagerBasedEnv, gym.Env):
             "curriculum_manager": ManagerLiveVisualizer(manager=self.curriculum_manager),
             "parkour_manager": ManagerLiveVisualizer(manager=self.parkour_manager),
             "reward_manager": ManagerLiveVisualizer(manager=self.reward_manager),
+            "joint_torque_monitor": ManagerLiveVisualizer(manager=self.joint_torque_monitor),
         }
 
 
@@ -127,6 +132,10 @@ class ParkourManagerBasedRLEnv(ParkourManagerBasedEnv, gym.Env):
         # -- reward computation
         reset_env_ids = self.reset_buf.nonzero(as_tuple=False).squeeze(-1)
         self.reward_buf = self.reward_manager.compute(dt=self.step_dt)
+
+        # -- update joint torque monitor
+        if hasattr(self, 'joint_torque_monitor'):
+            self.joint_torque_monitor.compute()
         
         if len(self.recorder_manager.active_terms) > 0:
             # update observations for recording if needed

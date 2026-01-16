@@ -11,7 +11,7 @@ import carb
 from isaaclab.envs.ui import ViewportCameraController 
 
 if TYPE_CHECKING:
-    from parkour_isaaclab.envs import  ParkourManagerBasedEnv
+    from parkour_isaaclab.envs import ParkourManagerBasedEnv
     from isaaclab.envs import ViewerCfg
 
 class ParkourViewportCameraController(ViewportCameraController):

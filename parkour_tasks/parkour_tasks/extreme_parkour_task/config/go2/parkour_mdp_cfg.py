@@ -50,13 +50,13 @@ class TeacherObservationsCfg:
         # observation terms (order preserved)
         extreme_parkour_observations = ObsTerm(
             func=observations.ExtremeParkourObservations,
-            params={            
-            "asset_cfg":SceneEntityCfg("robot"),
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_foot"),
-            "parkour_name":'base_parkour',
-            "history_length": 10
+            params={
+                "asset_cfg": SceneEntityCfg("robot"),
+                "sensor_cfg": SceneEntityCfg("contact_forces", body_names=".*_foot"),
+                "parkour_name": 'base_parkour',
+                "history_length": 10
             },
-            clip= (-100,100)
+            clip=(-100, 100)
         )
     policy: PolicyCfg = PolicyCfg()
 
@@ -69,10 +69,10 @@ class StudentObservationsCfg:
         extreme_parkour_observations = ObsTerm(
             func=observations.ExtremeParkourObservations,
             params={            
-            "asset_cfg":SceneEntityCfg("robot"),
-            "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_foot"),
-            "parkour_name":'base_parkour',
-            "history_length": 10,
+                "asset_cfg":SceneEntityCfg("robot"),
+                "sensor_cfg":SceneEntityCfg("contact_forces", body_names=".*_foot"),
+                "parkour_name":'base_parkour',
+                "history_length": 10,
             },
             clip= (-100,100)
         )
@@ -82,10 +82,10 @@ class StudentObservationsCfg:
         depth_cam = ObsTerm(
             func=observations.image_features,
             params={            
-            "sensor_cfg":SceneEntityCfg("depth_camera"),
-            "resize": (58, 87),
-            "buffer_len": 2,
-            "debug_vis":True
+                "sensor_cfg":SceneEntityCfg("depth_camera"),
+                "resize": (58, 87),
+                "buffer_len": 2,
+                "debug_vis":True
             },
         )
 
@@ -94,8 +94,8 @@ class StudentObservationsCfg:
         deta_yaw_ok =  ObsTerm(
             func=observations.obervation_delta_yaw_ok,
             params={            
-            "parkour_name":'base_parkour',
-            'threshold': 0.6
+                "parkour_name":'base_parkour',
+                'threshold': 0.6
             },
         )
     policy: PolicyCfg = PolicyCfg()

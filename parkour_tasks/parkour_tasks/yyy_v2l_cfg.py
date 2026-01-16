@@ -64,33 +64,30 @@ class ParkourDefaultSceneCfg(InteractiveSceneCfg):
     )
 
     def __post_init__(self):
+        self.robot.spawn.usd_path = "/home/ares/dog_ws/IsaacLab/dogV2.2.4.sep.usd"
         self.robot.spawn.articulation_props.enabled_self_collisions = False
-        self.robot.actuators['base_legs'] = ParkourDCMotorCfg(
-            joint_names_expr=[".*_HipA_joint", ".*_HipF_joint", ".*_Knee_joint"],
-            effort_limit={
-                '.*_HipA_joint': 17,
-                '.*_HipF_joint': 17,
-                '.*_Knee_joint': 25,
-            },
-            saturation_effort={
-                '.*_HipA_joint': 17,
-                '.*_HipF_joint': 17,
-                '.*_Knee_joint': 25,
-            },
-            peak_torque_speed={
-                '.*_HipA_joint': 8.4,
-                '.*_HipF_joint': 8.4,
-                '.*_Knee_joint': 3.7,
-            },
-            velocity_limit={
-                '.*_HipA_joint': 22.0,
-                '.*_HipF_joint': 22.0,
-                '.*_Knee_joint': 13.0,
-            },
+        self.robot.actuators['hips'] = ParkourDCMotorCfg(
+            joint_names_expr=[".*_HipA_joint", ".*_HipF_joint"],
+            effort_limit=17.0,
+            saturation_effort=17.0,
+            velocity_limit=22.0,
+            peak_torque_speed=8.4,
             stiffness=30.0,
             damping=0.5,
             friction=0.0,
         )
+        self.robot.actuators['knees'] = ParkourDCMotorCfg(
+            joint_names_expr=[".*_Knee_joint"],
+            effort_limit=25.0,
+            saturation_effort=25.0,
+            velocity_limit=13.0,
+            peak_torque_speed=3.7,
+            stiffness=30.0,
+            damping=0.5,
+            friction=0.0,
+        )
+
+        self.robot.init_state.pos = (0.0, 0.0, 0.35)
         # actuators={
         #     "base_legs": DCMotorCfg(
         #         joint_names_expr=[".*_HipA_joint", ".*_HipF_joint"],
@@ -120,7 +117,7 @@ CAMERA_CFG = RayCasterCameraCfg(
     prim_path='{ENV_REGEX_NS}/Robot/base_link',
     data_types=["distance_to_camera"],
     offset=RayCasterCameraCfg.OffsetCfg(
-        pos=(0.24, 0.0, 0.0),
+        pos=(0.31505, 0.0175, 0.023),
         rot=quat_from_euler_xyz_tuple(*tuple(torch.tensor([0, 0, 0]))),
         convention="ros"
     ),
@@ -140,7 +137,7 @@ CAMERA_USD_CFG = AssetBaseCfg(
     prim_path="{ENV_REGEX_NS}/Robot/base_link/d435",
     spawn=sim_utils.UsdFileCfg(usd_path=os.path.join(agents.__path__[0], 'd435.usd')),
     init_state=AssetBaseCfg.InitialStateCfg(
-        pos=(0.22, 0.002, 0.023),
+        pos=(0.31505, 0.0195, 0.023),
         rot=quat_from_euler_xyz_tuple(*tuple(torch.tensor([0, 0, 0]))),
     )
 )

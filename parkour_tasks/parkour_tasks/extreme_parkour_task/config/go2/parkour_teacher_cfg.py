@@ -19,12 +19,13 @@ class ParkourTeacherSceneCfg(ParkourDefaultSceneCfg):
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", 
-                                      history_length=2, 
-                                      track_air_time=True, 
-                                      debug_vis= False,
+    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*",
+                                      history_length=2,
+                                      track_air_time=True,
+                                      debug_vis=False,
                                       force_threshold=1.
                                       )
+
     def __post_init__(self):
         super().__post_init__()
         self.terrain.terrain_generator = EXTREME_PARKOUR_TERRAINS_CFG
@@ -76,7 +77,7 @@ class UnitreeGo2TeacherParkourEnvCfg_EVAL(UnitreeGo2TeacherParkourEnvCfg):
             self.scene.terrain.terrain_generator.num_rows = 5
             self.scene.terrain.terrain_generator.num_cols = 5
             self.scene.terrain.terrain_generator.random_difficulty = True
-            self.scene.terrain.terrain_generator.difficulty_range = (0.0,1.0)
+            self.scene.terrain.terrain_generator.difficulty_range = (0.0, 1.0)
         self.events.randomize_rigid_body_com = None
         self.events.randomize_rigid_body_mass = None
         self.events.push_by_setting_velocity.interval_range_s = (6.,6.)

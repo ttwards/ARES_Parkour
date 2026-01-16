@@ -225,7 +225,7 @@ class ParkourEvent(ParkourTerm):
         env_per_goals = self.terrain_goals[self.terrain.terrain_levels, self.terrain.terrain_types] 
         env_per_xy_goals = env_per_goals[:,:,:2].reshape(self.num_envs, -1,2) ## (env_num, 8, 2 )
         env_per_xy_goals = env_per_xy_goals + self.env_origins[:, :2].unsqueeze(1)
-        goal_height = self.env_per_heights.unsqueeze(-1)*self.terrain.cfg.terrain_generator.vertical_scale
+        goal_height = self.env_per_heights.unsqueeze(-1)
         env_per_goal_pos = torch.concat([env_per_xy_goals, goal_height],dim=-1)
         env_per_current_goal_pos = env_per_goal_pos[~self.future_goal_idx, :]
         env_per_future_goal_pos = env_per_goal_pos[self.future_goal_idx, :] .reshape(-1,3)

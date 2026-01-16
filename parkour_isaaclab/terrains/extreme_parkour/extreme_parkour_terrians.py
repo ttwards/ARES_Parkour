@@ -63,6 +63,128 @@ def random_uniform_terrain(
     return height_field_raw 
 
 @parkour_field_to_mesh
+def parkour_fixed_gap_terrain(
+    difficulty: float,
+    cfg: extreme_parkour_terrains_cfg.ExtremeParkourFixedGapTerrainCfg,
+    num_goals: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    间隙地形：平台-间隙-平台-间隙循环往复
+    - 平台长度：cfg.platform_length (支持动态表达式)
+    - 间隙长度：cfg.gap_length (支持动态表达式)
+    - 通道宽度：cfg.walkway_width (固定值)
+    """
+    # 评估动态表达式
+    if isinstance(cfg.platform_length, str):
+        platform_length = eval(cfg.platform_length, {"difficulty": difficulty})
+    else:
+        platform_length = cfg.platform_length
+    
+    if isinstance(cfg.gap_length, str):
+        gap_length = eval(cfg.gap_length, {"difficulty": difficulty})
+    else:
+        gap_length = cfg.gap_length
+    
+    print(f"cfg.internal_horizontal_scale={cfg.internal_horizontal_scale}, difficulty={difficulty:.2f}, "
+          f"platform_length={platform_length:.3f}m, gap_length={gap_length:.3f}m")
+    
+    width_pixels = int(cfg.size[0] / cfg.internal_horizontal_scale)
+    length_pixels = int(cfg.size[1] / cfg.internal_horizontal_scale)
+    height_field_raw = np.zeros((width_pixels, length_pixels))
+    
+    mid_y = length_pixels // 2
+    
+    # 转换为像素单位
+    platform_len_pixels = max(round(platform_length / cfg.internal_horizontal_scale), 1)
+    gap_len_pixels = max(round(gap_length / cfg.internal_horizontal_scale), 1)
+    half_walkway_width_pixels = round(cfg.walkway_width / 2.0 / cfg.internal_horizontal_scale)
+    
+    # 平台高度和间隙深度
+    platform_height = round(cfg.platform_height / cfg.vertical_scale)
+    gap_depth = -round(np.random.uniform(cfg.gap_depth[0], cfg.gap_depth[1]) / cfg.vertical_scale)
+    
+    # 初始平台
+    initial_platform_len = round(cfg.platform_len / cfg.internal_horizontal_scale)
+    height_field_raw[0:initial_platform_len, :] = platform_height
+    
+    # 通道边界
+    walkway_left = max(mid_y - half_walkway_width_pixels, 0)
+    walkway_right = min(mid_y + half_walkway_width_pixels, length_pixels)
+    
+    # 目标点
+    goals = np.zeros((num_goals, 2))
+    goal_heights = np.ones(num_goals) * platform_height
+    
+    # 第一个目标点在初始平台上
+    goals[0] = [initial_platform_len - 1, mid_y]
+    
+    # 当前位置
+    current_x = initial_platform_len
+    goal_idx = 1
+    
+    # 循环生成：平台-间隙-平台-间隙...
+    while current_x < width_pixels and goal_idx < num_goals:
+        # 生成平台
+        platform_start = current_x
+        platform_end = min(current_x + platform_len_pixels, width_pixels)
+        
+        if platform_end > platform_start:
+            # 平台区域设置为platform_height
+            height_field_raw[platform_start:platform_end, walkway_left:walkway_right] = platform_height
+            
+            # 平台两侧是深坑
+            height_field_raw[platform_start:platform_end, :walkway_left] = gap_depth
+            height_field_raw[platform_start:platform_end, walkway_right:] = gap_depth
+            
+            # 在平台中间放置一个目标点
+            if goal_idx < num_goals:
+                goal_x = (platform_start + platform_end) // 2
+                goals[goal_idx] = [goal_x, mid_y]
+                goal_heights[goal_idx] = platform_height
+                goal_idx += 1
+        
+        current_x = platform_end
+        
+        # 生成间隙
+        gap_start = current_x
+        gap_end = min(current_x + gap_len_pixels, width_pixels)
+        
+        if gap_end > gap_start:
+            # 整个间隙区域都是深坑
+            height_field_raw[gap_start:gap_end, :] = gap_depth
+        
+        current_x = gap_end
+    
+    # 如果还有剩余空间，填充为平台
+    if current_x < width_pixels:
+        height_field_raw[current_x:, walkway_left:walkway_right] = platform_height
+        height_field_raw[current_x:, :walkway_left] = gap_depth
+        height_field_raw[current_x:, walkway_right:] = gap_depth
+    
+    # 确保最后一个目标点在有效范围内
+    if goal_idx < num_goals:
+        goals[goal_idx:, 0] = width_pixels - 10
+        goals[goal_idx:, 1] = mid_y
+        goal_heights[goal_idx:] = platform_height
+    
+    # 生成边缘掩码
+    edge_mask = np.zeros_like(height_field_raw, dtype=bool)
+    min_height_step = 1
+    height_diff_y = np.diff(height_field_raw, axis=1)
+    edge_mask[:, :-1] |= height_diff_y <= -min_height_step
+    edge_mask[:, 1:] |= height_diff_y >= min_height_step
+    
+    # 填充边界
+    height_field_raw = padding_height_field_raw(height_field_raw, cfg)
+    
+    # 可选：添加粗糙表面
+    if cfg.apply_roughness:
+        height_field_raw = random_uniform_terrain(difficulty, cfg, height_field_raw)
+    
+    return height_field_raw, goals * cfg.internal_horizontal_scale, goal_heights * cfg.vertical_scale, edge_mask, cfg.internal_horizontal_scale
+
+
+@parkour_field_to_mesh
 def parkour_gap_terrain(
     difficulty: float, 
     cfg: extreme_parkour_terrains_cfg.ExtremeParkourGapTerrainCfg,
@@ -90,9 +212,15 @@ def parkour_gap_terrain(
 
         dis_x_min = round(cfg.x_range[0] / cfg.horizontal_scale) + gap_size
         dis_x_max = round(cfg.x_range[1] / cfg.horizontal_scale) + gap_size
+        # 确保 dis_x_max > dis_x_min，避免 np.random.randint 报错
+        if dis_x_max <= dis_x_min:
+            dis_x_max = dis_x_min + 1
 
         dis_y_min = round(cfg.y_range[0] / cfg.horizontal_scale)
         dis_y_max = round(cfg.y_range[1] / cfg.horizontal_scale)
+        # 确保 dis_y_max > dis_y_min，避免 np.random.randint 报错
+        if dis_y_max <= dis_y_min:
+            dis_y_max = dis_y_min + 1
 
         platform_len = round(cfg.platform_len / cfg.horizontal_scale)
         platform_height = round(cfg.platform_height / cfg.vertical_scale)
@@ -516,6 +644,8 @@ def parkour_wall_terrain(
         dis_x += rand_x
         # 目标点设置在墙后面
         goals[i+1] = [dis_x + wall_thickness//2, mid_y + rand_y]
+        # 设置目标高度为墙顶高度
+        goal_heights[i+1] = wall_height + platform_height
     
     # 最后的平台
     final_dis_x = dis_x + np.random.randint(dis_x_min, dis_x_max)

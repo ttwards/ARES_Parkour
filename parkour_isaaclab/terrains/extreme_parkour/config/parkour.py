@@ -8,28 +8,35 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
     border_width=20.0,
     num_rows=10,
     num_cols=40,
-    horizontal_scale=0.08,  # original scale is 0.05, But Computing issue in IsaacLab see this issue in https://github.com/isaac-sim/IsaacLab/issues/2187
+    horizontal_scale=0.08,  # 降低到原始值 0.05，提升地形分辨率（原来是0.08）
     vertical_scale=0.005,
     slope_threshold=1.5,
     difficulty_range=(0.0, 1.0),
     use_cache=False,
     curriculum=True,
     sub_terrains={
-        "parkour_gap": ExtremeParkourGapTerrainCfg(
-            proportion=0.23,
-            apply_roughness=True,
-            x_range=(0.8, 1.5),
-            half_valid_width=(0.6, 1.2),
-            gap_width='0.18 + 0.22*difficulty',
-            # height_drop_per_gap='0.2 - 0.5*difficulty',
-            height_drop_per_gap='0.',
+        # "parkour_gap": ExtremeParkourGapTerrainCfg(
+        #     proportion=0.23,
+        #     apply_roughness=True,
+        #     x_range=(0.55, 0.55),
+        #     half_valid_width=(0.78, 0.82),
+        #     gap_width='0.15',
+        #     # height_drop_per_gap='0.2 - 0.5*difficulty',
+        #     height_drop_per_gap='0.',
+        # ),
+        "parkour_fixed_gap": ExtremeParkourFixedGapTerrainCfg(
+            proportion=0.23,  # 占比 23%
+            platform_length='0.8 - 0.6 * difficulty',  # 平台长度: 700mm(难度0) -> 300mm(难度1)
+            gap_length='0.0 + 0.2 * difficulty',  # 间隙长度: 200mm(难度0) -> 100mm(难度1)
+            walkway_width=1.0,  # 1000mm 通道宽度
+            apply_roughness=False,  # 不添加粗糙表面
         ),
         "parkour_hurdle": ExtremeParkourHurdleTriMeshTerrainCfg(
             proportion=0.21,
             apply_roughness=False,
             pole_size='0.10 - 0.05 * difficulty',
             bar_size='0.10 - 0.05 * difficulty',
-            hurdle_height_range='0.45 - 0.2 * difficulty, 0.4 - 0.2 * difficulty',
+            hurdle_height_range='0.55 - 0.2 * difficulty, 0.6 - 0.2 * difficulty',
             x_range=(1.5, 2.5),
             y_range=(-0.3, 0.3),
             half_valid_width=(0.85, 1.15),
@@ -40,7 +47,7 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
             apply_flat=True,
             x_range=(1.2, 2.2),
             half_valid_width=(0.4, 0.8),
-            hurdle_height_range='0.1+0.1*difficulty, 0.15+0.15*difficulty'
+            hurdle_height_range='0.0, 0.001'
         ),
         # "parkour_rough": ExtremeParkourHurdleTerrainCfg(
         #     proportion=0.16,
@@ -55,7 +62,7 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
             apply_roughness=True,
             x_range=(0.3, 1.5),
             half_valid_width=(0.5, 1),
-            step_height='0.15 + 0.2*difficulty'
+            step_height='0.1 + 0.25*difficulty'
         ),
         # "parkour": ExtremeParkourTerrainCfg(
         #                 proportion=0.16,
@@ -76,12 +83,12 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
             x_range=(1.5, 2.0),
             half_valid_width=(0.4, 0.8),
             wall_thickness='0.12 - 0.1*difficulty',
-            wall_height_range='0.12 + 0.24*difficulty, 0.17 + 0.24*difficulty'
+            wall_height_range='0.1 + 0.35*difficulty, 0.15 + 0.35*difficulty'
         ),
         "parkour_slope": ExtremeParkourSlopeTerrainCfg(
             proportion=0.15,           # 比例你可以之后自己调
             apply_roughness=True,      # 可以关掉来纯看斜坡效果
-            # 斜率范围（沿 y 方向的高度变化，相对“世界坐标”的 m/m）
+            # 斜率范围（沿 y 方向的高度变化，相对"世界坐标"的 m/m）
             slope_range='-0.1 - 0.2 * difficulty, 0.1 + 0.2 * difficulty',
             # 每一段斜坡在 x 方向（机器人行走方向）的长度范围
             # segment_width_range='0.8 + 0.2 * difficulty, 1.6 + 0.4 * difficulty',
@@ -94,5 +101,5 @@ EXTREME_PARKOUR_TERRAINS_CFG = ParkourTerrainGeneratorCfg(
 # Copy base terrain settings and only tweak the arena scale/resolution for play mode.
 EXTREME_PARKOUR_TERRAINS_PLAY_CFG = deepcopy(EXTREME_PARKOUR_TERRAINS_CFG)
 EXTREME_PARKOUR_TERRAINS_PLAY_CFG.size = (16.0, 4.0)
-EXTREME_PARKOUR_TERRAINS_PLAY_CFG.num_rows = 4
+EXTREME_PARKOUR_TERRAINS_PLAY_CFG.num_rows = 16
 EXTREME_PARKOUR_TERRAINS_PLAY_CFG.num_cols = 8

@@ -11,29 +11,39 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ..terrains import ParkourSubTerrainBaseCfg
 
+
 def parkour_field_to_mesh(func: Callable) -> Callable:
     @functools.wraps(func)
-    def wrapper(difficulty: float, cfg: ParkourSubTerrainBaseCfg, num_goals:int):
-        if cfg.border_width > 0 and cfg.border_width < cfg.horizontal_scale:
+    def wrapper(difficulty: float, cfg: ParkourSubTerrainBaseCfg, num_goals: int):
+        # generate the height field
+        # 如果配置中有 internal_horizontal_scale，则使用它
+        if hasattr(cfg, 'internal_horizontal_scale'):
+            horizontal_scale = cfg.internal_horizontal_scale
+            print(f"使用独立精度: internal_scale={horizontal_scale}, main_scale={cfg.horizontal_scale}")
+        else:
+            horizontal_scale = cfg.horizontal_scale
+        
+        if cfg.border_width > 0 and cfg.border_width < horizontal_scale:
             raise ValueError(
                 f"The border width ({cfg.border_width}) must be greater than or equal to the"
-                f" horizontal scale ({cfg.horizontal_scale})."
+                f" horizontal scale ({horizontal_scale})."
             )
-        width_pixels = int(cfg.size[0] / cfg.horizontal_scale) + 1
-        length_pixels = int(cfg.size[1] / cfg.horizontal_scale) + 1
-        border_pixels = int(cfg.border_width / cfg.horizontal_scale) + 1
+        width_pixels = int(cfg.size[0] / horizontal_scale) + 1
+        length_pixels = int(cfg.size[1] / horizontal_scale) + 1
+        border_pixels = int(cfg.border_width / horizontal_scale) + 1
 
         heights = np.zeros((width_pixels, length_pixels), dtype=np.int16)
         # override size of the terrain to account for the border
         sub_terrain_size = [width_pixels - 2 * border_pixels, length_pixels - 2 * border_pixels]
-        sub_terrain_size = [dim * cfg.horizontal_scale for dim in sub_terrain_size]
+        sub_terrain_size = [dim * horizontal_scale for dim in sub_terrain_size]
         # update the config
         terrain_size = copy.deepcopy(cfg.size)
-
         cfg.size = tuple(sub_terrain_size)
-        # generate the height field
+
         result = func(difficulty, cfg, num_goals)
-        if len(result) == 4:
+        if len(result) == 5:
+            z_gen, goals, goal_heights, custom_edge_mask, _ = result  # 忽略返回的 scale，已经在开头处理了
+        elif len(result) == 4:
             z_gen, goals, goal_heights, custom_edge_mask = result
         elif len(result) == 3:
             z_gen, goals, goal_heights = result
@@ -50,10 +60,10 @@ def parkour_field_to_mesh(func: Callable) -> Callable:
         # set terrain size back to config
         # convert to trimesh
         vertices, triangles, x_edge_mask = convert_height_field_to_mesh(
-            heights, cfg.horizontal_scale, cfg.vertical_scale, cfg.slope_threshold
+            heights, horizontal_scale, cfg.vertical_scale, cfg.slope_threshold
         )
-        half_edge_width = int(cfg.edge_width_thresh / cfg.horizontal_scale)
-        structure = np.ones((half_edge_width*2+1, 1))
+        half_edge_width = int(cfg.edge_width_thresh / horizontal_scale)
+        structure = np.ones((half_edge_width * 2 + 1, 1))
         x_edge_mask = binary_dilation(x_edge_mask, structure=structure)
         if custom_edge_mask is not None:
             if border_pixels > 0:
@@ -62,20 +72,39 @@ def parkour_field_to_mesh(func: Callable) -> Callable:
             else:
                 padded_mask = custom_edge_mask.astype(bool)
             x_edge_mask = np.logical_or(x_edge_mask, padded_mask)
+        
+        # 如果使用了独立的 horizontal_scale，需要将 x_edge_mask 重采样到主网格尺寸
+        if hasattr(cfg, 'internal_horizontal_scale') and cfg.internal_horizontal_scale != cfg.horizontal_scale:
+            from scipy.ndimage import zoom
+            # 计算主网格的期望尺寸
+            main_width_pixels = int(terrain_size[0] / cfg.horizontal_scale) + 1
+            main_length_pixels = int(terrain_size[1] / cfg.horizontal_scale) + 1
+            
+            target_shape = (main_width_pixels, main_length_pixels)
+            scale_ratio = cfg.internal_horizontal_scale / cfg.horizontal_scale
+            
+            print(f"重采样 x_edge_mask: {x_edge_mask.shape} -> {target_shape}, ratio={scale_ratio}")
+            
+            # 重采样 x_edge_mask 到主网格尺寸
+            x_edge_mask = zoom(x_edge_mask.astype(float), scale_ratio, order=0) > 0.5
+            
+            print(f"重采样后 x_edge_mask: {x_edge_mask.shape}")
+            
         cfg.size = terrain_size
         mesh = trimesh.Trimesh(vertices=vertices, faces=triangles)
         if cfg.use_simplified:
-            mesh = mesh.simplify_quadric_decimation(face_count = int(0.65*triangles.shape[0]) , aggression=3)
+            mesh = mesh.simplify_quadric_decimation(face_count=int(0.65 * triangles.shape[0]), aggression=3)
         # compute origin
-        x1 = int((cfg.size[0] * 0.5 - 1) / cfg.horizontal_scale)
-        x2 = int((cfg.size[0] * 0.5 + 1) / cfg.horizontal_scale)
-        y1 = int((cfg.size[1] * 0.5 - 1) / cfg.horizontal_scale)
-        y2 = int((cfg.size[1] * 0.5 + 1) / cfg.horizontal_scale)
+        x1 = int((cfg.size[0] * 0.5 - 1) / horizontal_scale)
+        x2 = int((cfg.size[0] * 0.5 + 1) / horizontal_scale)
+        y1 = int((cfg.size[1] * 0.5 - 1) / horizontal_scale)
+        y2 = int((cfg.size[1] * 0.5 + 1) / horizontal_scale)
         origin_z = np.max(heights[x1:x2, y1:y2]) * cfg.vertical_scale
         origin = np.array([0.5 * cfg.size[0], 0.5 * cfg.size[1], origin_z])
         return [mesh], origin, goals, goal_heights, x_edge_mask
 
     return wrapper
+
 
 def convert_height_field_to_mesh(
     height_field: np.ndarray, horizontal_scale: float, vertical_scale: float, slope_threshold: float | None = None
@@ -131,4 +160,4 @@ def convert_height_field_to_mesh(
         triangles[start + 1 : stop : 2, 0] = ind0
         triangles[start + 1 : stop : 2, 1] = ind2
         triangles[start + 1 : stop : 2, 2] = ind3
-    return vertices, triangles, move_x!=0
+    return vertices, triangles, move_x != 0

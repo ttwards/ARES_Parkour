@@ -131,12 +131,11 @@ class AresYYYv2TeacherParkourEnvCfg_PLAY(AresYYYv2TeacherParkourEnvCfg_EVAL):
         super().__post_init__()
         self.episode_length_s = 60.
         self.scene.num_envs = 16
-        self.parkours.base_parkour.debug_vis = True
-        self.commands.base_velocity.debug_vis = True
         # 使用 PLAY 专用的地形配置
         self.scene.terrain.terrain_generator = EXTREME_PARKOUR_TERRAINS_PLAY_CFG
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.difficulty_range = (0.7,1.0)
+            self.scene.terrain.terrain_generator.difficulty_range = (0.7, 1.0)
         self.events.push_by_setting_velocity = None
 
-
+        self.parkours.base_parkour.debug_vis = True
+        self.commands.base_velocity.debug_vis = True

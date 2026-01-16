@@ -20,7 +20,7 @@ class ParkourTerrainGenerator(TerrainGenerator):
         self.x_edge_maskes = np.zeros((cfg.num_rows, cfg.num_cols, width_pixels, length_pixels), dtype=np.int16)
 
         super().__init__(cfg=cfg, device=device)
-        self.cfg:ParkourTerrainGeneratorCfg
+        self.cfg: ParkourTerrainGeneratorCfg
 
     def _generate_random_terrains(self):
         """Add terrains based on randomly sampled difficulty parameter."""
@@ -88,9 +88,9 @@ class ParkourTerrainGenerator(TerrainGenerator):
         self, 
         difficulty: float, 
         cfg: ParkourSubTerrainBaseCfg,
-        ) -> tuple[trimesh.Trimesh, np.ndarray, np.ndarray]:
+    ) -> tuple[trimesh.Trimesh, np.ndarray, np.ndarray]:
         # copy the configuration
-        cfg:ParkourSubTerrainBaseCfg = cfg.copy()
+        cfg: ParkourSubTerrainBaseCfg = cfg.copy()
         # add other parameters to the sub-terrain configuration
         cfg.difficulty = float(difficulty)
         cfg.seed = self.cfg.seed

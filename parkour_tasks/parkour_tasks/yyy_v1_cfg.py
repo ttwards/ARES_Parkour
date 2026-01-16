@@ -70,22 +70,22 @@ class ParkourDefaultSceneCfg(InteractiveSceneCfg):
             effort_limit={
                 '.*_HipA_joint': 17,
                 '.*_HipF_joint': 17,
-                '.*_Knee_joint': 34,
+                '.*_Knee_joint': 27,
             },
             saturation_effort={
                 '.*_HipA_joint': 17,
                 '.*_HipF_joint': 17,
-                '.*_Knee_joint': 34,
+                '.*_Knee_joint': 27,
             },
             peak_torque_speed={
                 '.*_HipA_joint': 8.4,
                 '.*_HipF_joint': 8.4,
-                '.*_Knee_joint': 4.1,
+                '.*_Knee_joint': 3.9,
             },
             velocity_limit={
                 '.*_HipA_joint': 22.0,
                 '.*_HipF_joint': 22.0,
-                '.*_Knee_joint': 11.0,
+                '.*_Knee_joint': 13.0,
             },
             stiffness=25.0,
             damping=0.5,

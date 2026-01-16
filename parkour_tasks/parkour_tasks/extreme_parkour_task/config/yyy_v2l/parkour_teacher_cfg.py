@@ -1,5 +1,6 @@
+from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, RayCasterCameraCfg, patterns
+from isaaclab.sensors.ray_caster.patterns import PinholeCameraPatternCfg
 
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.utils import configclass
 ##
 # Pre-defined configs
@@ -47,13 +48,40 @@ class ParkourTeacherSceneCfg(ParkourDefaultSceneCfg):
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base_link",
         offset=RayCasterCfg.OffsetCfg(
-            pos=(-0.5, 0.0, 0.25),
-            rot=quat_from_euler_xyz_tuple(0, 300, 0),
+            pos=(0.15, 0.0, 0.25),
+            rot=quat_from_euler_xyz_tuple(0, 0, 0),
         ),
         ray_alignment='yaw',
-        pattern_cfg=patterns.GridPatternCfg(resolution=0.125, size=[2.0, 1.5]),
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.2]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
+    )
+    height_scanner_base = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/base_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
+        ray_alignment="yaw",
+        pattern_cfg=patterns.GridPatternCfg(resolution=0.05, size=(0.1, 0.1)),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+    )
+    front_scanner = RayCasterCameraCfg(
+        prim_path='{ENV_REGEX_NS}/Robot/base_link',
+        data_types=["distance_to_camera"],
+        offset=RayCasterCameraCfg.OffsetCfg(
+            pos=(0.31505, 0.0175, 0.023),
+            rot=quat_from_euler_xyz_tuple(*tuple(torch.tensor([0, 90, 0]))),
+            convention="ros"
+        ),
+        depth_clipping_behavior='max',
+        pattern_cfg=PinholeCameraPatternCfg(
+            focal_length=11.041,
+            horizontal_aperture=20.955,
+            vertical_aperture=12.240,
+            height=8,
+            width=12,
+        ),
+        mesh_prim_paths=["/World/ground"],
+        max_distance=1.,
     )
     contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*",
                                       history_length=2, 
@@ -61,6 +89,43 @@ class ParkourTeacherSceneCfg(ParkourDefaultSceneCfg):
                                       debug_vis=False,
                                       force_threshold=1.
                                       )
+    # 足端离地高度测量 RayCaster - 每个足端一个，世界坐标系下垂直向下发射光线
+    foot_scanner_LF = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/LF_Knee_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.112, 0.213, 0.0)),
+        ray_alignment='yaw',  # 只跟随yaw，保持世界坐标系下垂直向下
+        pattern_cfg=patterns.GridPatternCfg(resolution=1.0, size=[0.001, 0.001]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+        max_distance=1.0,
+    )
+    foot_scanner_RF = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/RF_Knee_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.112, 0.213, 0.0)),
+        ray_alignment='yaw',
+        pattern_cfg=patterns.GridPatternCfg(resolution=1.0, size=[0.001, 0.001]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+        max_distance=1.0,
+    )
+    foot_scanner_LR = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/LR_Knee_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.112, 0.213, 0.0)),
+        ray_alignment='yaw',
+        pattern_cfg=patterns.GridPatternCfg(resolution=1.0, size=[0.001, 0.001]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+        max_distance=1.0,
+    )
+    foot_scanner_RR = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/RR_Knee_link",
+        offset=RayCasterCfg.OffsetCfg(pos=(0.112, 0.213, 0.0)),
+        ray_alignment='yaw',
+        pattern_cfg=patterns.GridPatternCfg(resolution=1.0, size=[0.001, 0.001]),
+        debug_vis=False,
+        mesh_prim_paths=["/World/ground"],
+        max_distance=1.0,
+    )
 
     def __post_init__(self):
         super().__post_init__()
@@ -92,10 +157,17 @@ class AresYYYv2lTeacherParkourEnvCfg(ParkourManagerBasedRLEnvCfg):
         # update sensor update periods
         self.scene.height_scanner.update_period = self.sim.dt * self.decimation
         self.scene.contact_forces.update_period = self.sim.dt * self.decimation
+        self.scene.foot_scanner_LF.update_period = self.sim.dt * self.decimation
+        self.scene.foot_scanner_RF.update_period = self.sim.dt * self.decimation
+        self.scene.foot_scanner_LR.update_period = self.sim.dt * self.decimation
+        self.scene.foot_scanner_RR.update_period = self.sim.dt * self.decimation
         self.scene.terrain.terrain_generator.curriculum = True
         self.actions.joint_pos.use_delay = False
         self.actions.joint_pos.history_length = 1
         self.events.random_camera_position = None
+
+        self.parkours.base_parkour.debug_vis = True
+        self.commands.base_velocity.debug_vis = True
 
 @configclass
 class AresYYYv2lTeacherParkourEnvCfg_EVAL(AresYYYv2lTeacherParkourEnvCfg):
@@ -137,7 +209,7 @@ class AresYYYv2lTeacherParkourEnvCfg_PLAY(AresYYYv2lTeacherParkourEnvCfg_EVAL):
         # 使用 PLAY 专用的地形配置
         self.scene.terrain.terrain_generator = EXTREME_PARKOUR_TERRAINS_PLAY_CFG
         if self.scene.terrain.terrain_generator is not None:
-            self.scene.terrain.terrain_generator.difficulty_range = (0.7,1.0)
+            self.scene.terrain.terrain_generator.difficulty_range = (0.2, 1.0)
         self.events.push_by_setting_velocity = None
 
 

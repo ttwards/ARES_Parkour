@@ -34,10 +34,12 @@ class ExtremeParkourObservations(ManagerTermBase):
         # 1. 获取基础组件
         self.contact_sensor: ContactSensor = env.scene.sensors['contact_forces']
         self.ray_sensor: RayCaster = env.scene.sensors['height_scanner']
+        self.front_scanner: RayCasterCamera | None = env.scene.sensors.get('front_scanner', None)
         # self.depth_camera: RayCasterCamera = env.scene.sensors['depth_camera']
         self.parkour_event = env.parkour_manager.get_term(cfg.params["parkour_name"])
         self.asset: Articulation = env.scene[cfg.params["asset_cfg"].name]
-        
+        self.debug_vis = cfg.params.get("debug_vis", False)
+                
         # 2. 处理 Body Name
         target_body_name = cfg.params.get("body_name", "base")
         self.body_id = self.asset.find_bodies(target_body_name)[0]
@@ -87,11 +89,21 @@ class ExtremeParkourObservations(ManagerTermBase):
         self._obs_history_buffer = torch.zeros(self.num_envs, self.history_length, self.obs_dim, device=self.device)
         self.delta_yaw = torch.zeros(self.num_envs, device=self.device)
         self.delta_next_yaw = torch.zeros(self.num_envs, device=self.device)
-        self.measured_heights = torch.zeros(self.num_envs, self.ray_sensor.num_rays, device=self.device)
+        # 初始化 front_scanner buffer（仿照 image_features）
+        # RayCasterCamera 的 num_rays 是图像的总像素数
+        if self.front_scanner is not None:
+            # 获取 front_scanner 图像的实际形状来确定 buffer 大小
+            # num_rays 对于 RayCasterCamera 来说是 height * width
+            self.front_scanner_num_rays = self.front_scanner.num_rays
+            self.front_scanner_buffer = torch.zeros(self.num_envs, self.front_scanner_num_rays, device=self.device)
+        self.measured_heights = torch.zeros(self.num_envs, self._get_heights_dim(), device=self.device)
         self.env = env
         
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
-        self._obs_history_buffer[env_ids, :, :] = 0. 
+        self._obs_history_buffer[env_ids, :, :] = 0.
+        # 重置 front_scanner buffer（仿照 image_features）
+        if self.front_scanner is not None and env_ids is not None:
+            self.front_scanner_buffer[env_ids] = 0. 
 
     def __call__(
         self,
@@ -107,16 +119,19 @@ class ExtremeParkourObservations(ManagerTermBase):
         ) -> torch.Tensor:
         
         terrain_names = self.parkour_event.env_per_terrain_name
-        env_idx_tensor = torch.tensor((terrain_names != 'parkour_flat')).to(dtype = torch.bool, device=self.device)
-        invert_env_idx_tensor = torch.tensor((terrain_names == 'parkour_flat')).to(dtype = torch.bool, device=self.device)
+        env_idx_tensor = torch.tensor((terrain_names != 'parkour_flat')).to(dtype=torch.bool, device=self.device)
+        invert_env_idx_tensor = torch.tensor((terrain_names == 'parkour_flat')).to(dtype=torch.bool, device=self.device)
         roll, pitch, yaw = euler_xyz_from_quat(self.asset.data.root_quat_w)
         imu_obs = torch.stack((wrap_to_pi(roll), wrap_to_pi(pitch)), dim=1).to(self.device)
         
         if env.common_step_counter % 5 == 0:
             self.delta_yaw = self.parkour_event.target_yaw - wrap_to_pi(yaw)
             self.delta_next_yaw = self.parkour_event.next_target_yaw - wrap_to_pi(yaw)
+            # 先更新 front_scanner buffer（如果有的话）
+            if self.front_scanner is not None:
+                self._update_front_scanner_buffer()
+            # 然后获取完整的 heights（包含拼接的 front_scanner 数据）
             self.measured_heights = self._get_heights()
-            
         commands = env.command_manager.get_command('base_velocity')
         
         all_joint_pos = self.asset.data.joint_pos - self.asset.data.default_joint_pos
@@ -158,6 +173,21 @@ class ExtremeParkourObservations(ManagerTermBase):
 
         obs_buf[:, 6:8] = 0
 
+        if self.debug_vis:
+            depth_images_np = self.depth_buffer[:, -2].detach().cpu().numpy()
+            depth_images_norm = []
+            for img in depth_images_np:
+                depth_images_norm.append(img)
+            rows = []
+            ncols = 4
+            for i in range(0, len(depth_images_norm), ncols):
+                row = np.hstack(depth_images_norm[i:i + ncols])
+                rows.append(row)
+
+            grid_img = np.vstack(rows)
+            cv2.imshow("depth_images_grid", grid_img)
+            cv2.waitKey(1)
+
         self._obs_history_buffer = torch.where(
             (env.episode_length_buf <= 1)[:, None, None], 
             torch.stack([obs_buf] * self.history_length, dim=1),
@@ -170,18 +200,18 @@ class ExtremeParkourObservations(ManagerTermBase):
     
     # ... 下面的辅助函数保持不变 (确保包含了 Epsilon 修复) ...
     def _get_contact_fill(self):
-        contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids] 
+        contact_forces = self.contact_sensor.data.net_forces_w_history[:, 0, self.sensor_cfg.body_ids]
         contact = torch.norm(contact_forces, dim=-1) > 2.
         previous_contact_forces = self.contact_sensor.data.net_forces_w_history[:, -1, self.sensor_cfg.body_ids]
         last_contacts = torch.norm(previous_contact_forces, dim=-1) > 2.
-        contact_filt = torch.logical_or(contact, last_contacts) 
-        return (contact_filt.float()-0.5).to(self.device)
+        contact_filt = torch.logical_or(contact, last_contacts)
+        return (contact_filt.float() - 0.5).to(self.device)
 
     def _get_priv_explicit(self):
-        base_lin_vel = self.asset.data.root_lin_vel_b 
+        base_lin_vel = self.asset.data.root_lin_vel_b
         return torch.cat((base_lin_vel * 2.0,
-                        0 * base_lin_vel,
-                        0 * base_lin_vel), dim=-1).to(self.device)
+                          0 * base_lin_vel,
+                          0 * base_lin_vel), dim=-1).to(self.device)
     
     def _get_priv_latent(self):
         epsilon = 1e-6
@@ -206,8 +236,39 @@ class ExtremeParkourObservations(ManagerTermBase):
         ), dim=-1).to(self.device)
         
     def _get_heights(self):
-        return torch.clip(self.ray_sensor.data.pos_w[:, 2].unsqueeze(1) - self.ray_sensor.data.ray_hits_w[..., 2] - 0.3, -2, 2).to(self.device)
+        """获取 height scanner 数据，如果有 front_scanner 则拼接到后面"""
+        # 获取 height scanner 数据
+        heights = torch.clip(self.ray_sensor.data.pos_w[:, 2].unsqueeze(1) - self.ray_sensor.data.ray_hits_w[..., 2] - 0.3, -2, 2).to(self.device)
+        
+        # 如果有 front_scanner，拼接到 heights 后面
+        if self.front_scanner is not None:
+            return torch.cat([heights, self.front_scanner_buffer], dim=-1)
+        else:
+            return heights
 
+    def _get_heights_dim(self) -> int:
+        """计算总维度：height_scanner + front_scanner"""
+        if self.front_scanner is not None:
+            return self.front_scanner_num_rays + self.ray_sensor.num_rays
+        else:
+            return self.ray_sensor.num_rays
+    
+    def _update_front_scanner_buffer(self):
+        """更新 front_scanner buffer（仿照 image_features 的处理方式）"""
+        if self.front_scanner is None:
+            return
+        
+        # 获取 front_scanner 的原始距离数据
+        front_distances = self.front_scanner.data.output["distance_to_camera"].squeeze(-1)
+        
+        # 处理数据：归一化和裁剪（仿照 image_features 的处理）
+        # 将距离转换为相对高度或深度信息
+        max_distance = self.front_scanner.cfg.max_distance
+        normalized_distances = torch.clip((front_distances - max_distance / 2) / max_distance, -1, 1)
+        
+        # 展平为 (num_envs, num_rays) 格式以便与 heights 拼接
+        # front_distances 的形状可能是 (num_envs, height, width)，需要展平后两维
+        self.front_scanner_buffer = normalized_distances.flatten(start_dim=1).to(self.device)
 
 class image_features(ManagerTermBase):
     

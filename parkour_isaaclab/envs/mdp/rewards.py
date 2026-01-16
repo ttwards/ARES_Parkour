@@ -24,84 +24,6 @@ import torch
 from isaaclab.managers import SceneEntityCfg
 
 
-def hurdle_collision_penalty(
-    env: ParkourManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    collision_threshold: float = 0.4,  # 距离目标0.4m内检测碰撞
-    hurdle_height_margin: float = 0.05,  # 横杆底部5cm的安全裕度
-    penalty_scale: float = -5.0,
-    parkour_name: str = "base_parkour",
-) -> torch.Tensor:
-    """
-    惩罚机器狗在接近跨栏目标时从上方通过（碰撞横杆）
-
-    Args:
-        env: 环境实例
-        asset_cfg: 机器人资产配置
-        collision_threshold: 触发检测的距离阈值（米）
-        hurdle_height_margin: 横杆下方的安全裕度（米）
-        penalty_scale: 惩罚系数（负数）
-
-    Returns:
-        惩罚值张量 shape: (num_envs,)
-    """
-    # 获取机器人
-    robot: Articulation = env.scene[asset_cfg.name]
-    parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
-
-    # 获取机器人base_link的世界坐标高度
-    base_height_w = robot.data.root_pos_w[:, 2]
-
-    # 获取机器人在地形局部坐标系中的位置
-    robot_pos_local = robot.data.root_pos_w[:, :2] - parkour_event.env_origins[:, :2]
-
-    # 计算到当前目标的距离
-    dist_to_goal = torch.norm(robot_pos_local - parkour_event.cur_goals[:, :2], dim=1)
-
-    # 只在接近目标时检测（距离 < collision_threshold）
-    near_goal = dist_to_goal < collision_threshold
-
-    # 获取当前目标的高度（横杆底部高度）
-    # 注意：这里假设 cur_goals[:, 2] 存储的是目标高度
-    goal_height = parkour_event.cur_goals[:, 2]
-
-    # 检测是否发生碰撞：base_link高度超过横杆底部（考虑安全裕度）
-    collision_detected = base_height_w > (goal_height + hurdle_height_margin)
-
-    # 组合条件：接近目标 且 发生碰撞
-    penalty_mask = near_goal & collision_detected
-
-    # 返回惩罚（只有满足条件的环境才有惩罚）
-    penalty = torch.where(penalty_mask, penalty_scale, 0.0)
-
-    return penalty
-
-def wall_clear_reward(
-    env: ParkourManagerBasedRLEnv,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    parkour_name: str = "base_parkour",
-    clearance_threshold: float = 0.45,
-    height_margin: float = 0.0,
-    saturation_margin: float = 0.2,
-    reward_scale: float = 1.0,
-) -> torch.Tensor:
-    """根据跨越墙体的高度余量给奖励，超出可配置的裕度后奖励不再增加。"""
-    robot: Articulation = env.scene[asset_cfg.name]
-    parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
-
-    base_height_w = robot.data.root_pos_w[:, 2]
-    robot_pos_local = robot.data.root_pos_w[:, :2] - parkour_event.env_origins[:, :2]
-    dist_to_goal = torch.norm(robot_pos_local - parkour_event.cur_goals[:, :2], dim=1)
-    near_goal = dist_to_goal < clearance_threshold
-
-    goal_height = parkour_event.cur_goals[:, 2]
-    height_diff = base_height_w - goal_height
-    clearance = torch.clamp(height_diff - height_margin, min=0.0)
-    denom = saturation_margin if saturation_margin > 1e-6 else 1e-6
-    normalized_reward = torch.clamp(clearance / denom, max=1.0) * reward_scale
-
-    return torch.where(near_goal, normalized_reward, torch.zeros_like(normalized_reward))
-
 class reward_feet_edge(ManagerTermBase):
     def __init__(self, cfg: RewardTermCfg, env: ParkourManagerBasedRLEnv):
         super().__init__(cfg, env)
@@ -208,41 +130,6 @@ def reward_ang_vel_xy(
     ) -> torch.Tensor: 
     asset: Articulation = env.scene[asset_cfg.name]
     return torch.sum(torch.square(asset.data.root_ang_vel_b[:,:2]), dim=1)
-
-
-def reward_body_height(
-    env: ParkourManagerBasedRLEnv,
-    parkour_name: str,
-    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
-    body_name: str = "base_link",
-) -> torch.Tensor:
-    """基于高度误差的 L2 惩罚（平方误差）。"""
-    parkour_event: ParkourEvent = env.parkour_manager.get_term(parkour_name)
-    asset: Articulation = env.scene[asset_cfg.name]
-    
-    # 缓存 body_id 到环境中，避免每次重复查找
-    cache_key = f"reward_target_height_body_id_{body_name}"
-    if not hasattr(env, cache_key):
-        body_ids = asset.find_bodies(body_name)
-        if len(body_ids) > 0 and len(body_ids[0]) > 0:
-            setattr(env, cache_key, body_ids[0][0])
-        else:
-            # 如果找不到指定的 body，回退到使用 root
-            setattr(env, cache_key, None)
-    
-    body_id = getattr(env, cache_key)
-    
-    # 获取当前机器人和目标的高度
-    if body_id is not None:
-        # 使用指定的 body 高度
-        current_robot_height = asset.data.body_pos_w[:, body_id, 2]
-    else:
-        # 回退到 root 高度
-        current_robot_height = asset.data.root_pos_w[:, 2]
-    
-    current_target_height = parkour_event.cur_goals[:, 2]
-    # 返回平方误差（正值），在配置中用负权重进行惩罚
-    return torch.square(current_target_height - current_robot_height)
 
 
 class reward_action_rate(ManagerTermBase):
@@ -534,6 +421,40 @@ def feet_air_time(
     reward *= torch.norm(env.command_manager.get_command(command_name), dim=1) > 0.1
     reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
     return reward
+
+
+def base_height_l2(
+    env: ParkourManagerBasedRLEnv,
+    target_height: float,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+    sensor_cfg: SceneEntityCfg | None = None,
+) -> torch.Tensor:
+    """Penalize asset height from its target using L2 squared kernel.
+
+    Note:
+        For flat terrain, target height is in the world frame. For rough terrain,
+        sensor readings can adjust the target height to account for the terrain.
+    """
+    # extract the used quantities (to enable type-hinting)
+    asset: RigidObject = env.scene[asset_cfg.name]
+    if sensor_cfg is not None:
+        sensor: RayCaster = env.scene[sensor_cfg.name]
+        # Adjust the target height using the sensor data
+        ray_hits = sensor.data.ray_hits_w[..., 2]
+        if torch.isnan(ray_hits).any() or torch.isinf(ray_hits).any() or torch.max(torch.abs(ray_hits)) > 1e6:
+            adjusted_target_height = asset.data.root_link_pos_w[:, 2]
+        else:
+            adjusted_target_height = target_height + torch.mean(ray_hits, dim=1)
+    else:
+        # Use the provided target height directly for flat terrain
+        adjusted_target_height = target_height
+    # Compute the L2 squared penalty only when below target height
+    # If height is below target (negative diff), penalize; if above, no penalty
+    height_diff = asset.data.root_pos_w[:, 2] - adjusted_target_height
+    reward = torch.square(torch.clamp(height_diff, max=0.0))
+    reward *= torch.clamp(-env.scene["robot"].data.projected_gravity_b[:, 2], 0, 0.7) / 0.7
+    return reward
+
 
 def reward_tracking_goal_vel(
     env: ParkourManagerBasedRLEnv, 
@@ -886,6 +807,7 @@ class reward_link_below_goal_height(ManagerTermBase):
 
         # 在 current_goal 高度下方留出的容差
         self.goal_margin = cfg.params.get("goal_margin", 0.0)
+        self.distance_threshold = cfg.params.get("distance_threshold", 0.5)
 
     def __call__(
         self,
@@ -893,15 +815,35 @@ class reward_link_below_goal_height(ManagerTermBase):
         asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
         parkour_name: str = "base_parkour",
         goal_margin: float | None = None,
+        distance_threshold: float | None = None,
     ) -> torch.Tensor:
-        # 当前每个 link 的世界高度
-        link_heights = self.asset.data.body_state_w[:, self.asset_cfg.body_ids, 2]
+        # 当前每个 link 的世界位置
+        link_pos = self.asset.data.body_state_w[:, self.asset_cfg.body_ids, :3]
+        link_heights = link_pos[..., 2]
 
         # 当前关卡目标高度（N, 1），让低于 current_goal 的部分产生惩罚
         margin = self.goal_margin if goal_margin is None else goal_margin
-        goal_height = self.parkour_event.cur_goals[:, 2].unsqueeze(1) - margin
+        
+        # 获取目标位置 (N, 1, 3)
+        # cur_goals 是相对坐标 (XY相对, Z绝对)，需要加上 env_origins 转换到世界坐标
+        env_origins = env.scene.terrain.env_origins
+        cur_goals_w = self.parkour_event.cur_goals.clone()
+        cur_goals_w[:, :2] += env_origins[:, :2]
+        cur_goals_w = cur_goals_w.unsqueeze(1)
+        
+        goal_height = cur_goals_w[..., 2] - margin
+
+        # 计算 link 到 goal 的水平距离
+        dist_threshold = self.distance_threshold if distance_threshold is None else distance_threshold
+        dist_xy = torch.norm(link_pos[..., :2] - cur_goals_w[..., :2], dim=-1)
+        
+        # 只有距离小于阈值时才计算高度惩罚
+        in_range_mask = dist_xy < dist_threshold
+
         diff = goal_height - link_heights
-        raw_penalty = torch.sum(torch.clamp(diff, min=0.0), dim=-1)
+        # clamp(diff, min=0) 只有当 link 低于 goal 时才有值，且只在范围内生效
+        raw_penalty = torch.sum(torch.clamp(diff, min=0.0) * in_range_mask.float(), dim=-1)
+        raw_penalty = torch.clamp(raw_penalty, max=1.0)
 
         # 同样只在关卡激活时生效
         rew = (self.parkour_event.terrain.terrain_levels > 0) * raw_penalty

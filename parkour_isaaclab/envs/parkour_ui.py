@@ -3,15 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from isaaclab.envs.ui.base_env_window import BaseEnvWindow
-import omni.kit.app
+
 if TYPE_CHECKING:
     from parkour_isaaclab.envs.parkour_manager_based_env import ParkourManagerBasedEnv
+
 
 class ParkourManagerBasedRLEnvWindow(BaseEnvWindow):
     """Window manager for the RL environment.
 
     On top of the basic environment window, this class adds controls for the RL environment.
-    This includes visualization of the command manager.
+    This includes visualization of the command manager and joint torque monitor.
     """
 
     def __init__(self, env: ParkourManagerBasedEnv, window_name: str = "IsaacLab"):
@@ -33,4 +34,5 @@ class ParkourManagerBasedRLEnvWindow(BaseEnvWindow):
                     self._visualize_manager(title="Curriculum", class_name="curriculum_manager")
                     self._visualize_manager(title="Termination", class_name="termination_manager")
                     self._visualize_manager(title="Parkour", class_name="parkour_manager")
-
+                    # 添加关节力矩监控
+                    self._visualize_manager(title="Joint Torques", class_name="joint_torque_monitor")

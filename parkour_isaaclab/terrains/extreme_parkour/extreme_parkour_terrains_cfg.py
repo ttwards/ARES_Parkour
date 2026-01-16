@@ -88,7 +88,7 @@ class ExtremeParkourHurdleTriMeshTerrainCfg(ExtremeParkourRoughTerrainCfg):
 class ExtremeParkourSlopeTerrainCfg(ExtremeParkourRoughTerrainCfg):
     """
     侧向进入斜坡地形：
-    - 地面整体是左右倾斜的“斜坡带”
+    - 地面整体是左右倾斜的"斜坡带"
     - 机器人沿 x 方向前进，沿着等高线行走，不直接爬坡
     - 多个斜坡段在 x 方向串联，每段斜率与长度都从范围中采样
     """
@@ -102,3 +102,24 @@ class ExtremeParkourSlopeTerrainCfg(ExtremeParkourRoughTerrainCfg):
     # 难度越高，平均段长略变大
     segment_width_range: str = '0.8 + 0.2 * difficulty, 1.6 + 0.4 * difficulty'
     noise_range: tuple[float, float] = (0.01, 0.1)
+
+
+@configclass
+class ExtremeParkourFixedGapTerrainCfg(ExtremeParkourRoughTerrainCfg):
+    """
+    间隙地形（随难度动态调整）：
+    - 平台长度：700mm -> 300mm (随难度递减)
+    - 间隙长度：200mm -> 100mm (随难度递减)
+    - 通道宽度：1000mm = 1.0m (固定)
+    - 平台-间隙-平台-间隙循环往复
+    
+    注意：使用 internal_horizontal_scale (0.05) 在内部生成高精度地形，
+    然后自动重采样到主网格的 horizontal_scale，以确保精确尺寸且不会 OOM
+    """
+    function = extreme_parkour_terrians.parkour_fixed_gap_terrain
+    internal_horizontal_scale: float = 0.05  # 内部高精度网格 (5cm)，仅用于此地形
+    platform_length: str | float = 0.7  # 平台长度 (米)，可使用表达式如 '0.7 - 0.4 * difficulty'
+    gap_length: str | float = 0.2  # 间隙长度 (米)，可使用表达式如 '0.2 - 0.1 * difficulty'
+    walkway_width: float = 1.0  # 通道宽度 (米) = 1000mm
+    gap_depth: tuple[float, float] = (0.4, 1.6)  # 间隙深度 (米)
+    apply_roughness: bool = False  # 不应用粗糙表面，保持平整

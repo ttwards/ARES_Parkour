@@ -31,11 +31,11 @@ class ParkourRewardManager(RewardManager):
             extras[log_key] = episodic_sum_avg / self._env.max_episode_length_s
 
             extras.update(
-                self._terrain_reward_logs(
-                    term_name=key,
-                    term_episode_values=term_episode_values,
-                    env_id_tensor=env_id_tensor,
-                )
+                # self._terrain_reward_logs(
+                #     term_name=key,
+                #     term_episode_values=term_episode_values,
+                #     env_id_tensor=env_id_tensor,
+                # )
             )
 
             self._episode_sums[key][env_ids] = 0.0

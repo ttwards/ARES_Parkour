@@ -20,6 +20,6 @@ class ParkourSubTerrainBaseCfg(HfTerrainBaseCfg):
     
 @configclass
 class ParkourTerrainGeneratorCfg(TerrainGeneratorCfg):
-    num_goals: int = 8 
-    terrain_names: list[str] = [] 
-    random_difficulty: bool = False 
+    num_goals: int = 8
+    terrain_names: list[str] = []
+    random_difficulty: bool = False

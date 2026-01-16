@@ -7,5 +7,6 @@ ExtremeParkourTerrainCfg,
 ExtremeParkourDemoTerrainCfg,
 ExtremeParkourWallTerrainCfg,
 ExtremeParkourHurdleTriMeshTerrainCfg,
-ExtremeParkourSlopeTerrainCfg
+ExtremeParkourSlopeTerrainCfg,
+ExtremeParkourFixedGapTerrainCfg
 )
